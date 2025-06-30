@@ -1,8 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from todo_parser import TodoParser
 from user_manager import UserManager
 import os
+import base64
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
@@ -25,6 +27,40 @@ def get_user_todo_parser():
     """Get TodoParser instance for current user"""
     if current_user.is_authenticated:
         user_todo_file = user_manager.get_user_todo_file(current_user.username)
+        return TodoParser(user_todo_file)
+    return None
+
+def basic_auth_required(f):
+    """Decorator for basic authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not auth.username or not auth.password:
+            return Response(
+                'Authentication required',
+                401,
+                {'WWW-Authenticate': 'Basic realm="Todo API"'}
+            )
+        
+        # Authenticate user
+        user = user_manager.authenticate_user(auth.username, auth.password)
+        if not user:
+            return Response(
+                'Invalid credentials',
+                401,
+                {'WWW-Authenticate': 'Basic realm="Todo API"'}
+            )
+        
+        # Store authenticated user in request context
+        request.authenticated_user = user
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+def get_api_user_todo_parser():
+    """Get TodoParser instance for API authenticated user"""
+    if hasattr(request, 'authenticated_user'):
+        user_todo_file = user_manager.get_user_todo_file(request.authenticated_user.username)
         return TodoParser(user_todo_file)
     return None
 
@@ -489,6 +525,151 @@ def profile():
                          user_stats=user_stats,
                          user_todo_display_path=user_todo_display_path,
                          todo_directory=todo_directory)
+
+# REST API Endpoints with Basic Authentication
+
+@app.route('/api/v1/todo', methods=['GET'])
+@basic_auth_required
+def api_get_todo():
+    """REST API: Get todo.txt file content (Export functionality)"""
+    try:
+        user_todo_file = user_manager.get_user_todo_file(request.authenticated_user.username)
+        with open(user_todo_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return Response(
+            content,
+            mimetype='text/plain',
+            headers={
+                'Content-Type': 'text/plain; charset=utf-8',
+                'X-Username': request.authenticated_user.username
+            }
+        )
+    except FileNotFoundError:
+        return jsonify({
+            'error': 'Todo file not found',
+            'message': 'User todo file does not exist'
+        }), 404
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/v1/todo', methods=['POST'])
+@basic_auth_required
+def api_post_todo():
+    """REST API: Update todo.txt file content (Import functionality)"""
+    try:
+        # Check content type
+        if request.content_type and 'application/json' in request.content_type:
+            # JSON payload with content field
+            data = request.get_json()
+            if not data or 'content' not in data:
+                return jsonify({
+                    'error': 'Bad request',
+                    'message': 'JSON payload must contain "content" field'
+                }), 400
+            content = data['content']
+        else:
+            # Plain text payload
+            content = request.get_data(as_text=True)
+            if content is None:
+                return jsonify({
+                    'error': 'Bad request',
+                    'message': 'Request body cannot be empty'
+                }), 400
+        
+        # Validate content is a string
+        if not isinstance(content, str):
+            return jsonify({
+                'error': 'Bad request',
+                'message': 'Content must be a string'
+            }), 400
+        
+        # Write to user's todo.txt file
+        user_todo_file = user_manager.get_user_todo_file(request.authenticated_user.username)
+        with open(user_todo_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        # Parse the file to validate and get statistics
+        todo_parser = get_api_user_todo_parser()
+        if todo_parser:
+            todo_parser.load_tasks()
+            task_count = len(todo_parser.tasks)
+            completed_count = len([t for t in todo_parser.tasks if t.completed])
+        else:
+            task_count = 0
+            completed_count = 0
+        
+        return jsonify({
+            'success': True,
+            'message': 'Todo file updated successfully',
+            'username': request.authenticated_user.username,
+            'statistics': {
+                'total_tasks': task_count,
+                'completed_tasks': completed_count,
+                'incomplete_tasks': task_count - completed_count
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/v1/todo/info', methods=['GET'])
+@basic_auth_required
+def api_get_todo_info():
+    """REST API: Get todo file information and statistics"""
+    try:
+        todo_parser = get_api_user_todo_parser()
+        if not todo_parser:
+            return jsonify({
+                'error': 'Internal server error',
+                'message': 'Could not access todo file'
+            }), 500
+        
+        todo_parser.load_tasks()
+        
+        # Calculate statistics
+        total_tasks = len(todo_parser.tasks)
+        completed_tasks = len([t for t in todo_parser.tasks if t.completed])
+        incomplete_tasks = total_tasks - completed_tasks
+        
+        # Priority distribution
+        priority_counts = {'A': 0, 'B': 0, 'C': 0, 'None': 0}
+        for task in todo_parser.tasks:
+            if not task.completed:  # Only count incomplete tasks
+                if task.priority:
+                    priority_counts[task.priority] += 1
+                else:
+                    priority_counts['None'] += 1
+        
+        # Get projects and contexts
+        all_projects = todo_parser.get_all_projects()
+        all_contexts = todo_parser.get_all_contexts()
+        
+        return jsonify({
+            'username': request.authenticated_user.username,
+            'statistics': {
+                'total_tasks': total_tasks,
+                'completed_tasks': completed_tasks,
+                'incomplete_tasks': incomplete_tasks,
+                'priority_distribution': priority_counts,
+                'total_projects': len(all_projects),
+                'total_contexts': len(all_contexts)
+            },
+            'projects': sorted(all_projects),
+            'contexts': sorted(all_contexts)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
