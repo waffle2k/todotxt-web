@@ -1,0 +1,16 @@
+(A) 2024-12-29 Call dentist for annual checkup +Health @phone
+(B) 2024-12-29 Review quarterly budget and expenses +PersonalFinance @computer
+2024-12-29 Buy groceries for the week +Household @errands
+(C) 2024-12-29 Update resume with recent projects +Career @computer
+2024-12-29 Plan weekend hiking trip +Recreation @home
+x 2024-12-30 2024-12-28 Set up Flask development environment +WebDev @computer
+(A) 2024-12-29 Prepare presentation for Monday meeting +Work @computer due:2025-01-06
+2024-12-29 Read chapter 5 of Python book +Learning @home
+(B) 2024-12-29 Schedule car maintenance appointment +Maintenance @phone
+2024-12-29 Organize digital photos from vacation +Personal @computer
+x 2024-12-29 2024-12-28 Install todo.txt web manager +WebDev @computer
+(C) 2024-12-29 Research new coffee shops in the area +Personal @errands
+2024-12-29 Write blog post about Flask development +WebDev @computer
+(A) 2024-12-29 Submit tax documents to accountant +Finance @email due:2025-01-15
+2024-12-29 Clean and organize home office +Household @home
+2025-06-29 Test the Flask todo.txt web application +WebDev @computer

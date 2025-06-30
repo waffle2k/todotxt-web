@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Add Task - Todo.txt Web Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-plus-circle"></i> Add New Task
+                </h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_task') }}" method="post">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Task Description *</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" 
+                                  placeholder="Enter your task description..." required></textarea>
+                        <div class="form-text">
+                            Describe what needs to be done. You can include projects (+project) and contexts (@context) directly in the description.
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="priority" class="form-label">Priority</label>
+                                <select class="form-select" id="priority" name="priority">
+                                    <option value="">No Priority</option>
+                                    <option value="A">A - High Priority</option>
+                                    <option value="B">B - Medium Priority</option>
+                                    <option value="C">C - Low Priority</option>
+                                </select>
+                                <div class="form-text">
+                                    Set the importance level of this task.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="projects" class="form-label">Projects</label>
+                                <input type="text" class="form-control" id="projects" name="projects" 
+                                       placeholder="WebDev, PersonalFinance, Health">
+                                <div class="form-text">
+                                    Comma-separated list of projects (without + prefix).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="contexts" class="form-label">Contexts</label>
+                        <input type="text" class="form-control" id="contexts" name="contexts" 
+                               placeholder="home, work, computer, errands">
+                        <div class="form-text">
+                            Comma-separated list of contexts where this task can be done (without @ prefix).
+                        </div>
+                    </div>
+
+                    <!-- Suggestions based on existing data -->
+                    {% if all_projects or all_contexts %}
+                        <div class="mb-3">
+                            <h6>Suggestions:</h6>
+                            <div class="row">
+                                {% if all_projects %}
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Existing Projects:</small><br>
+                                        {% for project in all_projects %}
+                                            <span class="badge bg-info text-dark me-1 mb-1 clickable-tag" 
+                                                  onclick="addToField('projects', '{{ project }}')">+{{ project }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                {% if all_contexts %}
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Existing Contexts:</small><br>
+                                        {% for context in all_contexts %}
+                                            <span class="badge bg-secondary me-1 mb-1 clickable-tag" 
+                                                  onclick="addToField('contexts', '{{ context }}')">@{{ context }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Preview -->
+                    <div class="mb-3">
+                        <label class="form-label">Preview (todo.txt format):</label>
+                        <div class="form-control bg-light" id="preview" style="min-height: 38px; font-family: monospace;">
+                            <span class="text-muted">Enter task details to see preview...</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Tasks
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Add Task
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> Todo.txt Format Help
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Priority Levels:</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge priority-a">(A)</span> High Priority - Urgent tasks</li>
+                            <li><span class="badge priority-b">(B)</span> Medium Priority - Important tasks</li>
+                            <li><span class="badge priority-c">(C)</span> Low Priority - Nice to have</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Tags:</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge bg-info text-dark">+project</span> Groups related tasks</li>
+                            <li><span class="badge bg-secondary">@context</span> Where/when task can be done</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Examples:</h6>
+                    <div class="bg-light p-2 rounded font-monospace small">
+                        <div>(A) Call dentist for appointment +Health @phone</div>
+                        <div>(B) Review quarterly budget +PersonalFinance @computer</div>
+                        <div>Buy groceries +Household @errands</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Add tag to field function
+function addToField(fieldName, value) {
+    const field = document.getElementById(fieldName);
+    const currentValue = field.value.trim();
+    
+    // Check if value already exists
+    const values = currentValue.split(',').map(v => v.trim()).filter(v => v);
+    if (!values.includes(value)) {
+        if (currentValue) {
+            field.value = currentValue + ', ' + value;
+        } else {
+            field.value = value;
+        }
+        updatePreview();
+    }
+}
+
+// Update preview function
+function updatePreview() {
+    const description = document.getElementById('description').value.trim();
+    const priority = document.getElementById('priority').value;
+    const projects = document.getElementById('projects').value.trim();
+    const contexts = document.getElementById('contexts').value.trim();
+    
+    let preview = '';
+    
+    // Add priority
+    if (priority) {
+        preview += `(${priority}) `;
+    }
+    
+    // Add current date
+    const today = new Date().toISOString().split('T')[0];
+    preview += `${today} `;
+    
+    // Add description
+    if (description) {
+        preview += description;
+        
+        // Add projects
+        if (projects) {
+            const projectList = projects.split(',').map(p => p.trim()).filter(p => p);
+            projectList.forEach(project => {
+                if (!project.startsWith('+')) {
+                    preview += ` +${project}`;
+                } else {
+                    preview += ` ${project}`;
+                }
+            });
+        }
+        
+        // Add contexts
+        if (contexts) {
+            const contextList = contexts.split(',').map(c => c.trim()).filter(c => c);
+            contextList.forEach(context => {
+                if (!context.startsWith('@')) {
+                    preview += ` @${context}`;
+                } else {
+                    preview += ` ${context}`;
+                }
+            });
+        }
+    }
+    
+    const previewElement = document.getElementById('preview');
+    if (preview.trim()) {
+        previewElement.innerHTML = preview;
+        previewElement.classList.remove('text-muted');
+    } else {
+        previewElement.innerHTML = '<span class="text-muted">Enter task details to see preview...</span>';
+    }
+}
+
+// Add event listeners for real-time preview
+document.getElementById('description').addEventListener('input', updatePreview);
+document.getElementById('priority').addEventListener('change', updatePreview);
+document.getElementById('projects').addEventListener('input', updatePreview);
+document.getElementById('contexts').addEventListener('input', updatePreview);
+
+// Focus on description field when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('description').focus();
+});
+
+// Add keyboard shortcut for quick save (Ctrl+Enter)
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+        document.querySelector('form').submit();
+    }
+});
+</script>
+{% endblock %}

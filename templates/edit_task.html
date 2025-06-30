@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Task - Todo.txt Web Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pencil"></i> Edit Task
+                </h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('edit_task', task_id=task_id) }}" method="post">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Task Description *</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" 
+                                  placeholder="Enter your task description..." required>{{ task.get_clean_description() }}</textarea>
+                        <div class="form-text">
+                            Describe what needs to be done. You can include projects (+project) and contexts (@context) directly in the description.
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="priority" class="form-label">Priority</label>
+                                <select class="form-select" id="priority" name="priority">
+                                    <option value="" {% if not task.priority %}selected{% endif %}>No Priority</option>
+                                    <option value="A" {% if task.priority == 'A' %}selected{% endif %}>A - High Priority</option>
+                                    <option value="B" {% if task.priority == 'B' %}selected{% endif %}>B - Medium Priority</option>
+                                    <option value="C" {% if task.priority == 'C' %}selected{% endif %}>C - Low Priority</option>
+                                </select>
+                                <div class="form-text">
+                                    Set the importance level of this task.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="projects" class="form-label">Projects</label>
+                                <input type="text" class="form-control" id="projects" name="projects" 
+                                       value="{{ current_projects }}" placeholder="WebDev, PersonalFinance, Health">
+                                <div class="form-text">
+                                    Comma-separated list of projects (without + prefix).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="contexts" class="form-label">Contexts</label>
+                        <input type="text" class="form-control" id="contexts" name="contexts" 
+                               value="{{ current_contexts }}" placeholder="home, work, computer, errands">
+                        <div class="form-text">
+                            Comma-separated list of contexts where this task can be done (without @ prefix).
+                        </div>
+                    </div>
+
+                    <!-- Current Task Info -->
+                    <div class="mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">Current Task Information:</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Status:</small><br>
+                                        {% if task.completed %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle"></i> Completed
+                                            </span>
+                                            {% if task.completion_date %}
+                                                <small class="text-muted">on {{ task.completion_date }}</small>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-warning">
+                                                <i class="bi bi-clock"></i> Incomplete
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Created:</small><br>
+                                        {% if task.creation_date %}
+                                            {{ task.creation_date }}
+                                        {% else %}
+                                            <span class="text-muted">Unknown</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <small class="text-muted">Original todo.txt line:</small><br>
+                                    <code class="small">{{ task.raw_line }}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Suggestions based on existing data -->
+                    {% if all_projects or all_contexts %}
+                        <div class="mb-3">
+                            <h6>Suggestions:</h6>
+                            <div class="row">
+                                {% if all_projects %}
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Existing Projects:</small><br>
+                                        {% for project in all_projects %}
+                                            <span class="badge bg-info text-dark me-1 mb-1 clickable-tag" 
+                                                  onclick="addToField('projects', '{{ project }}')">+{{ project }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                {% if all_contexts %}
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Existing Contexts:</small><br>
+                                        {% for context in all_contexts %}
+                                            <span class="badge bg-secondary me-1 mb-1 clickable-tag" 
+                                                  onclick="addToField('contexts', '{{ context }}')">@{{ context }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Preview -->
+                    <div class="mb-3">
+                        <label class="form-label">Preview (todo.txt format):</label>
+                        <div class="form-control bg-light" id="preview" style="min-height: 38px; font-family: monospace;"
+                             data-completed="{{ task.completed|lower }}"
+                             data-completion-date="{{ task.completion_date or '' }}"
+                             data-creation-date="{{ task.creation_date or '' }}">
+                            <span class="text-muted">Loading preview...</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Tasks
+                        </a>
+                        <div>
+                            <a href="{{ url_for('complete_task', task_id=task_id) }}" 
+                               class="btn btn-outline-{% if task.completed %}warning{% else %}success{% endif %} me-2">
+                                <i class="bi bi-{% if task.completed %}arrow-counterclockwise{% else %}check{% endif %}"></i>
+                                {% if task.completed %}Mark Incomplete{% else %}Mark Complete{% endif %}
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> Todo.txt Format Help
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Priority Levels:</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge priority-a">(A)</span> High Priority - Urgent tasks</li>
+                            <li><span class="badge priority-b">(B)</span> Medium Priority - Important tasks</li>
+                            <li><span class="badge priority-c">(C)</span> Low Priority - Nice to have</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Tags:</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge bg-info text-dark">+project</span> Groups related tasks</li>
+                            <li><span class="badge bg-secondary">@context</span> Where/when task can be done</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Examples:</h6>
+                    <div class="bg-light p-2 rounded font-monospace small">
+                        <div>(A) Call dentist for appointment +Health @phone</div>
+                        <div>(B) Review quarterly budget +PersonalFinance @computer</div>
+                        <div>Buy groceries +Household @errands</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Add tag to field function
+function addToField(fieldName, value) {
+    const field = document.getElementById(fieldName);
+    const currentValue = field.value.trim();
+    
+    // Check if value already exists
+    const values = currentValue.split(',').map(v => v.trim()).filter(v => v);
+    if (!values.includes(value)) {
+        if (currentValue) {
+            field.value = currentValue + ', ' + value;
+        } else {
+            field.value = value;
+        }
+        updatePreview();
+    }
+}
+
+// Update preview function
+function updatePreview() {
+    const description = document.getElementById('description').value.trim();
+    const priority = document.getElementById('priority').value;
+    const projects = document.getElementById('projects').value.trim();
+    const contexts = document.getElementById('contexts').value.trim();
+    
+    let preview = '';
+    
+    // Task completion status from data attributes
+    const previewElement = document.getElementById('preview');
+    const isCompleted = previewElement.dataset.completed === 'true';
+    const completionDate = previewElement.dataset.completionDate;
+    const creationDate = previewElement.dataset.creationDate;
+    
+    if (isCompleted) {
+        preview += 'x ';
+        if (completionDate) {
+            preview += completionDate + ' ';
+        }
+    }
+    
+    // Add priority (only if not completed)
+    if (priority && !isCompleted) {
+        preview += '(' + priority + ') ';
+    }
+    
+    // Add creation date
+    if (creationDate) {
+        preview += creationDate + ' ';
+    }
+    
+    // Add description
+    if (description) {
+        preview += description;
+        
+        // Add projects
+        if (projects) {
+            const projectList = projects.split(',').map(p => p.trim()).filter(p => p);
+            projectList.forEach(project => {
+                if (!project.startsWith('+')) {
+                    preview += ' +' + project;
+                } else {
+                    preview += ' ' + project;
+                }
+            });
+        }
+        
+        // Add contexts
+        if (contexts) {
+            const contextList = contexts.split(',').map(c => c.trim()).filter(c => c);
+            contextList.forEach(context => {
+                if (!context.startsWith('@')) {
+                    preview += ' @' + context;
+                } else {
+                    preview += ' ' + context;
+                }
+            });
+        }
+    }
+    
+    if (preview.trim()) {
+        previewElement.innerHTML = preview;
+        previewElement.classList.remove('text-muted');
+    } else {
+        previewElement.innerHTML = '<span class="text-muted">Enter task details to see preview...</span>';
+    }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners for real-time preview
+    document.getElementById('description').addEventListener('input', updatePreview);
+    document.getElementById('priority').addEventListener('change', updatePreview);
+    document.getElementById('projects').addEventListener('input', updatePreview);
+    document.getElementById('contexts').addEventListener('input', updatePreview);
+    
+    // Initialize preview and focus
+    updatePreview();
+    document.getElementById('description').focus();
+    
+    // Add keyboard shortcut for quick save (Ctrl+Enter)
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            document.querySelector('form').submit();
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  todo-app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: todo-txt-manager-dev
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount source code for live development
+      - .:/app
+      # Mount a volume for persistent user data and todo files
+      - todo_data_dev:/app/data
+      # Exclude node_modules and __pycache__ from sync
+      - /app/__pycache__
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=1
+      - TODO_FILES_DIR=/app/data
+      - SECRET_KEY=dev-secret-key-not-for-production
+    restart: unless-stopped
+    # Override the CMD to run with auto-reload
+    command: python -m flask run --host=0.0.0.0 --port=5000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Development user (root for easier file permissions)
+    user: root
+
+volumes:
+  todo_data_dev:
+    driver: local
+
+networks:
+  default:
+    driver: bridge

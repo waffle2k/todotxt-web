@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  todo-app:
+    build: .
+    container_name: todo-txt-manager-prod
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount a volume for persistent user data and todo files
+      - todo_data:/app/data
+      # Optional: Mount config file if you have one
+      # - ./config:/app/config:ro
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=app.py
+      - TODO_FILES_DIR=/app/data
+      - SECRET_KEY=${SECRET_KEY:-your-very-secure-secret-key-change-this}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    # Read-only root filesystem (except for data volume)
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+volumes:
+  todo_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+
+networks:
+  default:
+    driver: bridge

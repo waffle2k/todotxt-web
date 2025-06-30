@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Todo.txt Manager{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- User Profile Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-person-circle"></i> User Profile
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="text-success">Terminal User Information</h5>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Username:</strong></td>
+                                    <td>{{ current_user.username }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Email:</strong></td>
+                                    <td>{{ current_user.email }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Account Created:</strong></td>
+                                    <td>{{ current_user.created_at[:10] if current_user.created_at else 'Unknown' }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Last Login:</strong></td>
+                                    <td>{{ current_user.last_login[:10] if current_user.last_login else 'First login' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="text-info">Todo.txt Statistics</h5>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Total Tasks:</strong></td>
+                                    <td><span class="badge bg-primary">{{ user_stats.total_tasks }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Completed:</strong></td>
+                                    <td><span class="badge bg-success">{{ user_stats.completed_tasks }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Incomplete:</strong></td>
+                                    <td><span class="badge bg-warning">{{ user_stats.incomplete_tasks }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Projects:</strong></td>
+                                    <td><span class="badge bg-info">{{ user_stats.total_projects }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Contexts:</strong></td>
+                                    <td><span class="badge bg-secondary">{{ user_stats.total_contexts }}</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Management -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-download"></i> Export Data
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Download your personal todo.txt file</p>
+                    <a href="{{ url_for('export_todo') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-text"></i> Download todo.txt
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-upload"></i> Import Data
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Upload a todo.txt file to replace your current tasks</p>
+                    <form action="{{ url_for('import_todo') }}" method="POST" enctype="multipart/form-data" class="d-inline">
+                        <div class="input-group">
+                            <input type="file" class="form-control" name="file" accept=".txt" required>
+                            <button type="submit" class="btn btn-outline-warning" onclick="return confirm('This will replace all your current tasks. Are you sure?')">
+                                <i class="bi bi-upload"></i> Import
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal Commands -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-terminal"></i> Terminal Commands
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Your personal todo.txt file location:</p>
+                    <div class="bg-dark text-success p-3 rounded font-monospace">
+                        <code>{{ user_todo_display_path }}</code>
+                    </div>
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        Todo files directory: <code>{{ todo_directory }}</code>
+                        {% if todo_directory != "." and todo_directory != "/home/pmb/code/todo" %}
+                        <br><i class="bi bi-gear"></i> Configure with environment variable: <code>TODO_FILES_DIR</code>
+                        {% endif %}
+                    </small>
+                    
+                    <div class="mt-3">
+                        <h6>Quick Actions:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <a href="{{ url_for('add_task') }}" class="btn btn-success mb-2 w-100">
+                                    <i class="bi bi-plus-circle"></i> Add New Task
+                                </a>
+                            </div>
+                            <div class="col-md-6">
+                                <a href="{{ url_for('index') }}" class="btn btn-primary mb-2 w-100">
+                                    <i class="bi bi-list-task"></i> View All Tasks
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-exclamation"></i> Security & Privacy
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Data Isolation</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle text-success"></i> Your tasks are stored in a separate file</li>
+                                <li><i class="bi bi-check-circle text-success"></i> No access to other users' data</li>
+                                <li><i class="bi bi-check-circle text-success"></i> Secure password hashing</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Account Actions</h6>
+                            <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a>
+                            <small class="text-muted d-block mt-2">
+                                Always logout when using shared computers
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
