@@ -44,11 +44,11 @@ class TodoTask:
             self.creation_date = date_match.group(1)
             line = line[len(date_match.group(0)):]
         
-        # Extract projects (+project)
-        self.projects = re.findall(r'\+(\w+)', line)
+        # Extract projects (+project) and convert to lowercase
+        self.projects = [p.lower() for p in re.findall(r'\+(\w+)', line)]
         
-        # Extract contexts (@context)
-        self.contexts = re.findall(r'@(\w+)', line)
+        # Extract contexts (@context) and convert to lowercase
+        self.contexts = [c.lower() for c in re.findall(r'@(\w+)', line)]
         
         # Extract key:value pairs
         kv_matches = re.findall(r'(\w+):(\w+)', line)
@@ -103,14 +103,14 @@ class TodoTask:
             elif priority_filter != "none" and self.priority != priority_filter:
                 return False
         
-        # Project filter
+        # Project filter (case insensitive)
         if project_filter and project_filter != "all":
-            if project_filter not in self.projects:
+            if project_filter.lower() not in self.projects:
                 return False
         
-        # Context filter
+        # Context filter (case insensitive)
         if context_filter and context_filter != "all":
-            if context_filter not in self.contexts:
+            if context_filter.lower() not in self.contexts:
                 return False
         
         # Completed filter
@@ -165,18 +165,18 @@ class TodoParser:
         # Add description
         task_desc = description
         
-        # Add projects (filter out duplicates)
+        # Add projects (filter out duplicates and convert to lowercase)
         if projects:
-            unique_projects = list(dict.fromkeys(projects))  # Remove duplicates while preserving order
+            unique_projects = list(dict.fromkeys([p.lower() for p in projects]))  # Remove duplicates while preserving order
             for project in unique_projects:
                 if not project.startswith('+'):
                     task_desc += f' +{project}'
                 else:
                     task_desc += f' {project}'
         
-        # Add contexts (filter out duplicates)
+        # Add contexts (filter out duplicates and convert to lowercase)
         if contexts:
-            unique_contexts = list(dict.fromkeys(contexts))  # Remove duplicates while preserving order
+            unique_contexts = list(dict.fromkeys([c.lower() for c in contexts]))  # Remove duplicates while preserving order
             for context in unique_contexts:
                 if not context.startswith('@'):
                     task_desc += f' @{context}'
@@ -222,18 +222,18 @@ class TodoParser:
             
             task_desc = clean_desc
             
-            # Add projects (filter out duplicates)
+            # Add projects (filter out duplicates and convert to lowercase)
             if projects:
-                unique_projects = list(dict.fromkeys(projects))  # Remove duplicates while preserving order
+                unique_projects = list(dict.fromkeys([p.lower() for p in projects]))  # Remove duplicates while preserving order
                 for project in unique_projects:
                     if not project.startswith('+'):
                         task_desc += f' +{project}'
                     else:
                         task_desc += f' {project}'
             
-            # Add contexts (filter out duplicates)
+            # Add contexts (filter out duplicates and convert to lowercase)
             if contexts:
-                unique_contexts = list(dict.fromkeys(contexts))  # Remove duplicates while preserving order
+                unique_contexts = list(dict.fromkeys([c.lower() for c in contexts]))  # Remove duplicates while preserving order
                 for context in unique_contexts:
                     if not context.startswith('@'):
                         task_desc += f' @{context}'
