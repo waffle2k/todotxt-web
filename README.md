@@ -1,132 +1,316 @@
-# Todo.txt Web Manager
+# todotxt-web
 
-A Flask web application for managing todo.txt files via a web interface with user authentication and terminal styling.
+A Flask web application for managing todo.txt files with user authentication, a terminal-style UI, a REST API, a CLI client, and an MCP server for Claude integration.
 
-## Features
+## Components
 
-- **User Authentication**: Secure registration, login, and session management
-- **Individual Todo Files**: Each user gets their own isolated todo.txt file
-- **Terminal Styling**: Authentic terminal interface with dark theme and green accents
-- **Full Todo.txt Support**: Priorities, projects (+project), contexts (@context), dates
-- **Advanced Filtering**: Search, filter by priority/project/context/completion status
-- **Bulk Operations**: Select multiple tasks for batch actions
-- **Import/Export**: Download or upload todo.txt files
-- **Real-time Statistics**: Task counts, project/context statistics
-- **Responsive Design**: Works on desktop and mobile devices
+| Path | Description |
+|------|-------------|
+| `app.py` | Flask web app and REST API |
+| `cli/todo.py` | Full todo.txt-compatible CLI client |
+| `mcp/server.py` | MCP server for Claude |
 
-## Installation
+---
 
-1. Install dependencies:
+## Web App
+
+### Requirements
+
+- Python 3.9+
+
+### Installation
+
 ```bash
+git clone https://github.com/waffle2k/todotxt-web.git
+cd todotxt-web
 pip install -r requirements.txt
 ```
 
-2. Run the application:
+### Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SECRET_KEY` | Flask session secret | `please-change-this-secret-key-in-production` |
+| `TODO_FILES_DIR` | Directory for per-user todo.txt files | current directory |
+| `FLASK_DEBUG` | Enable debug mode | `False` |
+
+### Running
+
 ```bash
+export SECRET_KEY=your-secret-key
+export TODO_FILES_DIR=/var/lib/todotxt
 python app.py
 ```
 
-3. Open your browser to `http://localhost:5000`
-
-## Configuration
-
-### Todo Files Directory
-
-By default, user todo files are stored in the current directory. You can configure a different location using the `TODO_FILES_DIR` environment variable:
+For production use gunicorn:
 
 ```bash
-# Store todo files in a specific directory
-export TODO_FILES_DIR="/path/to/todo/files"
-python app.py
+gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
+
+### Docker
 
 ```bash
-# Example: Store in a dedicated data directory
-export TODO_FILES_DIR="./data/todos"
-python app.py
+# Quick start
+docker-compose up -d
+
+# Production (set SECRET_KEY first)
+export SECRET_KEY=your-very-secure-random-key
+docker-compose -f docker-compose.prod.yml up -d
+
+# Development (live reload)
+docker-compose -f docker-compose.dev.yml up -d
 ```
+
+The app listens on port `5001` by default when using docker-compose.
+
+### First use
+
+1. Open `http://localhost:5001` (or `http://localhost:5000` if running directly)
+2. Register an account
+3. Start adding tasks
+
+---
+
+## API
+
+Authentication uses session cookies — log in via `POST /login` first.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `POST /login` | POST | Log in; form fields: `username`, `password`, `remember` |
+| `GET /api/search` | GET | Search/filter tasks |
+| `POST /add` | POST | Add a task |
+| `GET /complete/<id>` | GET | Toggle task completion |
+| `POST /edit/<id>` | POST | Edit a task |
+| `GET /delete/<id>` | GET | Delete a task |
+
+### Search parameters (`GET /api/search`)
+
+| Parameter | Values |
+|-----------|--------|
+| `q` | Free-text search |
+| `priority` | `all`, `A`, `B`, `C`, `none` |
+| `project` | Project name or `all` |
+| `context` | Context name or `all` |
+| `completed` | `all`, `completed`, `incomplete` |
+
+### Task object
+
+```json
+{
+  "id": 1,
+  "raw_line": "(A) 2025-01-01 Buy groceries +errands @home",
+  "description": "Buy groceries",
+  "priority": "A",
+  "completed": false,
+  "projects": ["errands"],
+  "contexts": ["home"],
+  "creation_date": "2025-01-01",
+  "completion_date": null
+}
+```
+
+---
+
+## CLI
+
+A full todo.txt-compatible CLI that talks to the web API. Compatible with standard `todo.sh` command names.
+
+### Installation
 
 ```bash
-# Example: Store in user's home directory
-export TODO_FILES_DIR="$HOME/todos"
-python app.py
+pip install -r cli/requirements.txt
+
+# Optional: install as a command
+cp cli/todo.py ~/bin/todo
+chmod +x ~/bin/todo
 ```
 
-The application will automatically create the directory if it doesn't exist.
+### Configuration
 
-### File Structure
-
-When configured, user todo files will be stored as:
-- `{TODO_FILES_DIR}/todo_username.txt`
-
-For example, with `TODO_FILES_DIR="/var/lib/todos"`:
-- User "alice" → `/var/lib/todos/todo_alice.txt`
-- User "bob" → `/var/lib/todos/todo_bob.txt`
-
-## Usage
-
-1. **Register**: Create a new account with username, email, and password
-2. **Login**: Access your personal todo list
-3. **Add Tasks**: Create tasks with priorities, projects, and contexts
-4. **Manage Tasks**: Edit, complete, delete, or bulk-process tasks
-5. **Filter & Search**: Find tasks using the advanced filtering system
-6. **Export/Import**: Download your todo.txt file or upload a new one
-7. **Profile**: View statistics and manage your account
-
-## Todo.txt Format
-
-The application follows the standard todo.txt format:
-
-```
-(A) 2025-06-29 High priority task +Project @context
-2025-06-29 Regular task +AnotherProject @home
-x 2025-06-29 2025-06-28 Completed task +Project @context
+```bash
+export TODO_URL=http://localhost:5000    # or your hosted URL
+export TODO_USER=youruser
+export TODO_PASS=yourpassword
 ```
 
-- `(A)`, `(B)`, `(C)` - Priority levels
-- `+Project` - Project tags
-- `@context` - Context tags
-- `x` - Completed tasks
-- Dates in YYYY-MM-DD format
+### Usage
 
-## Security
+```bash
+# List incomplete tasks
+todo ls
 
-- Passwords are hashed using SHA-256
-- Each user has isolated access to their own todo file
-- Session management with Flask-Login
-- No access to other users' data
+# List all tasks including completed
+todo lsa
 
-## Development
+# Add a task
+todo add "(A) Fix the thing +homelab @computer"
 
-The application uses:
-- **Flask** - Web framework
-- **Flask-Login** - User session management
-- **Bootstrap 5** - UI framework (with custom terminal styling)
-- **JSON** - User data storage
-- **Plain text** - Todo.txt file format
+# Add with priority shorthand
+todo add Buy milk +errands @home
+todo pri 5 A
 
-## File Structure
+# Mark done
+todo do 3
+
+# Mark undone
+todo undone 3
+
+# Edit a task
+todo replace 4 "Updated task description +project @context"
+
+# Append text to a task
+todo append 4 "and more details"
+
+# Set priority
+todo pri 2 B
+
+# Remove priority
+todo depri 2
+
+# Delete a task
+todo del 7
+
+# Filter by project or context
+todo ls +homelab
+todo ls @computer
+
+# List projects / contexts
+todo lsprj
+todo lsc
+
+# List by priority
+todo lsp A
+todo lsp A-C
+
+# Show counts
+todo report
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-p` | Plain output (no color) |
+| `-c` | Force color output |
+| `-v` | Verbose output |
+| `-f` | Force (skip confirmation prompts) |
+| `-t` | Prepend today's date when adding tasks |
+
+---
+
+## MCP Server
+
+Exposes todo task management as tools for Claude. Once configured, Claude can list, add, complete, edit, and delete tasks on your behalf.
+
+### Installation
+
+```bash
+pip install -r mcp/requirements.txt
+```
+
+### Configuration
+
+```bash
+export TODOTXT_WEB_URL=http://localhost:5000
+export TODOTXT_USER=youruser
+export TODOTXT_PASS=yourpassword
+```
+
+### Running
+
+```bash
+python mcp/server.py
+```
+
+### Claude Desktop configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "todotxt": {
+      "command": "python",
+      "args": ["/path/to/todotxt-web/mcp/server.py"],
+      "env": {
+        "TODOTXT_WEB_URL": "http://localhost:5000",
+        "TODOTXT_USER": "youruser",
+        "TODOTXT_PASS": "yourpassword"
+      }
+    }
+  }
+}
+```
+
+### Claude Code (CLI) configuration
+
+Add to `~/.claude/settings.json` or your project's `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "todotxt": {
+      "command": "python",
+      "args": ["/path/to/todotxt-web/mcp/server.py"],
+      "env": {
+        "TODOTXT_WEB_URL": "http://localhost:5000",
+        "TODOTXT_USER": "youruser",
+        "TODOTXT_PASS": "yourpassword"
+      }
+    }
+  }
+}
+```
+
+### Available tools
+
+| Tool | Description |
+|------|-------------|
+| `list_tasks(search, priority, project, context, completed)` | List and filter tasks |
+| `add_task(description, priority, projects, contexts)` | Add a new task |
+| `complete_task(task_id)` | Mark a task as completed |
+| `uncomplete_task(task_id)` | Mark a completed task as incomplete |
+| `edit_task(task_id, description, priority, projects, contexts)` | Edit an existing task |
+| `delete_task(task_id)` | Permanently delete a task |
+
+---
+
+## Todo.txt format
 
 ```
-├── app.py                 # Main Flask application
-├── user_manager.py        # User authentication and management
-├── todo_parser.py         # Todo.txt file parsing and manipulation
-├── requirements.txt       # Python dependencies
-├── templates/            # HTML templates
-│   ├── base.html         # Base template with navigation
-│   ├── login.html        # Login page
-│   ├── register.html     # Registration page
-│   ├── profile.html      # User profile page
-│   ├── index.html        # Main task dashboard
-│   ├── add_task.html     # Add task form
-│   └── edit_task.html    # Edit task form
-├── static/
-│   ├── css/style.css     # Terminal-style CSS
-│   └── js/app.js         # JavaScript functionality
-├── users.json            # User account data
-└── todo_*.txt            # Individual user todo files
+(A) 2025-01-01 High priority task +Project @context
+2025-01-01 Regular task +AnotherProject @home
+x 2025-01-15 2025-01-01 Completed task +Project @context
 ```
 
-## License
+- `(A)`, `(B)`, `(C)` — Priority levels
+- `+Project` — Project tags
+- `@context` — Context tags
+- `x` — Completed task marker
+- Dates in `YYYY-MM-DD` format
 
-This project is open source and available under the MIT License.
+---
+
+## File structure
+
+```
+todotxt-web/
+├── app.py              # Flask app and API routes
+├── user_manager.py     # User auth and account management
+├── todo_parser.py      # Todo.txt parsing
+├── requirements.txt    # Web app dependencies
+├── Dockerfile
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── docker-compose.dev.yml
+├── cli/
+│   ├── todo.py         # CLI client
+│   └── requirements.txt
+├── mcp/
+│   ├── server.py       # MCP server
+│   └── requirements.txt
+├── templates/          # Jinja2 HTML templates
+└── static/             # CSS and JS
+```
