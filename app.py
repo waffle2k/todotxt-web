@@ -32,6 +32,8 @@ for _username in user_manager.users:
     else:
         todo_db.ensure_db(_db_path)
 
+_backup_dir = os.path.join(user_manager.todo_dir, 'backups')
+
 # SSE client queues — one per connected browser tab
 _sse_clients = []
 _sse_lock = threading.Lock()
@@ -52,6 +54,15 @@ def _notify_clients():
             for q in dead:
                 if q in _sse_clients:
                     _sse_clients.remove(q)
+
+
+def _backup_and_notify(tdb: todo_db.TodoDb) -> None:
+    """Write a dated backup snapshot then push SSE update to all clients."""
+    try:
+        todo_db.write_backup(tdb.db_path, _backup_dir)
+    except Exception:
+        pass  # backup failure must never break a write operation
+    _notify_clients()
 
 
 @login_manager.user_loader
@@ -244,7 +255,7 @@ def add_task():
                 projects=projects if projects else None,
                 contexts=contexts if contexts else None
             )
-            _notify_clients()
+            _backup_and_notify(tdb)
             flash('Task added successfully!', 'success')
             return redirect(url_for('index'))
         except Exception as e:
@@ -293,7 +304,7 @@ def edit_task(task_id):
                 projects=projects if projects else None,
                 contexts=contexts if contexts else None
             )
-            _notify_clients()
+            _backup_and_notify(tdb)
             flash('Task updated successfully!', 'success')
             return redirect(url_for('index'))
         except Exception as e:
@@ -337,7 +348,7 @@ def complete_task(task_id):
     except Exception as e:
         flash(f'Error updating task: {str(e)}', 'error')
     else:
-        _notify_clients()
+        _backup_and_notify(tdb)
 
     return redirect(url_for('index'))
 
@@ -354,7 +365,7 @@ def delete_task(task_id):
         if not tdb.delete_task(task_id):
             flash('Task not found!', 'error')
         else:
-            _notify_clients()
+            _backup_and_notify(tdb)
             flash('Task deleted successfully!', 'success')
     except Exception as e:
         flash(f'Error deleting task: {str(e)}', 'error')
@@ -438,7 +449,7 @@ def bulk_action():
             error_count += 1
 
     if success_count > 0:
-        _notify_clients()
+        _backup_and_notify(tdb)
         flash(f'Successfully processed {success_count} tasks!', 'success')
     if error_count > 0:
         flash(f'Failed to process {error_count} tasks!', 'error')
@@ -486,7 +497,7 @@ def import_todo():
                 flash('Error accessing your todo list.', 'error')
                 return redirect(url_for('index'))
             tdb.replace_from_txt(content)
-            _notify_clients()
+            _backup_and_notify(tdb)
             flash('File imported successfully!', 'success')
         except Exception as e:
             flash(f'Error importing file: {str(e)}', 'error')
@@ -575,7 +586,7 @@ def api_post_todo():
         task_count = len(all_tasks)
         completed_count = sum(1 for t in all_tasks if t.completed)
 
-        _notify_clients()
+        _backup_and_notify(tdb)
         return jsonify({
             'success': True,
             'message': 'Todo data updated successfully',

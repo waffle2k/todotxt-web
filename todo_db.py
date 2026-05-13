@@ -1,3 +1,4 @@
+import os
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -161,6 +162,22 @@ def _build_raw_line(
             seen_c.add(c)
     parts.append(desc)
     return " ".join(parts)
+
+
+def write_backup(db_path: str, backup_dir: str) -> str:
+    """Write a dated todo.txt snapshot to backup_dir. Returns the backup file path."""
+    os.makedirs(backup_dir, exist_ok=True)
+    stem = os.path.splitext(os.path.basename(db_path))[0]  # "todo_pmb"
+    today = datetime.now().strftime("%Y-%m-%d")
+    backup_file = os.path.join(backup_dir, f"{stem}_{today}.txt")
+    with _db(db_path) as conn:
+        rows = conn.execute("SELECT raw_line FROM tasks ORDER BY id").fetchall()
+    content = "\n".join(r["raw_line"] for r in rows)
+    if content:
+        content += "\n"
+    with open(backup_file, "w", encoding="utf-8") as f:
+        f.write(content)
+    return backup_file
 
 
 def _insert_tags(conn, task_id: int, projects: List[str], contexts: List[str]) -> None:
