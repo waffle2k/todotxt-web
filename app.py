@@ -1,9 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, Response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, Response, stream_with_context
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from todo_parser import TodoParser
 from user_manager import UserManager
 import os
 import base64
+import queue
+import threading
 from functools import wraps
 
 app = Flask(__name__)
@@ -18,6 +20,24 @@ login_manager.login_message_category = 'info'
 
 # Initialize user manager
 user_manager = UserManager()
+
+# SSE client queues — one per connected browser tab
+_sse_clients = []
+_sse_lock = threading.Lock()
+
+
+def _notify_clients():
+    """Push an update event to all connected SSE clients."""
+    dead = []
+    with _sse_lock:
+        for q in list(_sse_clients):
+            try:
+                q.put_nowait("update")
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_clients.remove(q)
+
 
 @login_manager.user_loader
 def load_user(username):
@@ -221,6 +241,7 @@ def add_task():
                 projects=projects if projects else None,
                 contexts=contexts if contexts else None
             )
+            _notify_clients()
             flash('Task added successfully!', 'success')
             return redirect(url_for('index'))
         except Exception as e:
@@ -273,6 +294,7 @@ def edit_task(task_id):
                 projects=projects if projects else None,
                 contexts=contexts if contexts else None
             )
+            _notify_clients()
             flash('Task updated successfully!', 'success')
             return redirect(url_for('index'))
         except Exception as e:
@@ -319,7 +341,9 @@ def complete_task(task_id):
             flash('Task completed!', 'success')
     except Exception as e:
         flash(f'Error updating task: {str(e)}', 'error')
-    
+    else:
+        _notify_clients()
+
     return redirect(url_for('index'))
 
 @app.route('/delete/<int:task_id>')
@@ -337,6 +361,7 @@ def delete_task(task_id):
     
     try:
         todo_parser.delete_task(task_id)
+        _notify_clients()
         flash('Task deleted successfully!', 'success')
     except Exception as e:
         flash(f'Error deleting task: {str(e)}', 'error')
@@ -433,6 +458,7 @@ def bulk_action():
             error_count += 1
     
     if success_count > 0:
+        _notify_clients()
         flash(f'Successfully processed {success_count} tasks!', 'success')
     if error_count > 0:
         flash(f'Failed to process {error_count} tasks!', 'error')
@@ -486,6 +512,7 @@ def import_todo():
             with open(user_todo_file, 'w', encoding='utf-8') as f:
                 f.write(content)
             
+            _notify_clients()
             flash('File imported successfully!', 'success')
         except Exception as e:
             flash(f'Error importing file: {str(e)}', 'error')
@@ -602,6 +629,7 @@ def api_post_todo():
             task_count = 0
             completed_count = 0
         
+        _notify_clients()
         return jsonify({
             'success': True,
             'message': 'Todo file updated successfully',
@@ -671,5 +699,37 @@ def api_get_todo_info():
             'message': str(e)
         }), 500
 
+@app.route('/events')
+@login_required
+def events():
+    """SSE endpoint — browser connects here to receive real-time task change notifications."""
+    def stream():
+        q = queue.Queue(maxsize=10)
+        with _sse_lock:
+            _sse_clients.append(q)
+        try:
+            yield "data: connected\n\n"
+            while True:
+                try:
+                    event = q.get(timeout=25)
+                    yield f"data: {event}\n\n"
+                except queue.Empty:
+                    # Heartbeat keeps connection alive through proxies
+                    yield ": heartbeat\n\n"
+        finally:
+            with _sse_lock:
+                if q in _sse_clients:
+                    _sse_clients.remove(q)
+
+    return Response(
+        stream_with_context(stream()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)

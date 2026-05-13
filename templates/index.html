@@ -350,17 +350,31 @@ document.querySelectorAll('.task-checkbox').forEach(function(checkbox) {
 function confirmBulkAction() {
     const selectedCount = document.querySelectorAll('.task-checkbox:checked').length;
     const action = document.querySelector('select[name="action"]').value;
-    
+
     if (selectedCount === 0) {
         alert('Please select at least one task.');
         return false;
     }
-    
+
     if (action === 'delete') {
         return confirm(`Are you sure you want to delete ${selectedCount} selected task(s)?`);
     }
-    
+
     return confirm(`Are you sure you want to ${action} ${selectedCount} selected task(s)?`);
 }
+
+// Live updates via SSE — reload when another client mutates the task list
+(function() {
+    var source = new EventSource('/events');
+    source.onmessage = function(e) {
+        if (e.data === 'update') {
+            location.reload();
+        }
+    };
+    source.onerror = function() {
+        source.close();
+        setTimeout(function() { location.reload(); }, 5000);
+    };
+})();
 </script>
 {% endblock %}
