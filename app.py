@@ -31,7 +31,6 @@ def _notify_clients():
     dead = []
     with _sse_lock:
         clients = list(_sse_clients)
-    print(f"[SSE] notify_clients: {len(clients)} connected", flush=True)
     for q in clients:
         try:
             q.put_nowait("update")
