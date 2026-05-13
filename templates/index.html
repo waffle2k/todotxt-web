@@ -374,8 +374,10 @@ function confirmBulkAction() {
         if (badge) { badge.textContent = 'live: ' + text; badge.className = 'badge ms-2 bg-' + color; badge.style.fontSize = '0.6rem'; }
     }
     var disconnected = false;
+    var reloadTimer = null;
     var source = new EventSource('/events');
     source.onopen = function() {
+        if (reloadTimer) { clearTimeout(reloadTimer); reloadTimer = null; }
         if (disconnected) { location.reload(); return; }
         setStatus('connected', 'success');
     };
@@ -385,6 +387,10 @@ function confirmBulkAction() {
     source.onerror = function() {
         disconnected = true;
         setStatus('reconnecting…', 'warning');
+        // If onopen doesn't fire within 10s, force a reload to recover
+        if (!reloadTimer) {
+            reloadTimer = setTimeout(function() { location.reload(); }, 10000);
+        }
     };
 })();
 </script>
