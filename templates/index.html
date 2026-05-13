@@ -373,12 +373,17 @@ function confirmBulkAction() {
     function setStatus(text, color) {
         if (badge) { badge.textContent = 'live: ' + text; badge.className = 'badge ms-2 bg-' + color; badge.style.fontSize = '0.6rem'; }
     }
+    var disconnected = false;
     var source = new EventSource('/events');
-    source.onopen = function() { setStatus('connected', 'success'); };
+    source.onopen = function() {
+        if (disconnected) { location.reload(); return; }
+        setStatus('connected', 'success');
+    };
     source.onmessage = function(e) {
         if (e.data === 'update') { location.reload(); }
     };
     source.onerror = function() {
+        disconnected = true;
         setStatus('reconnecting…', 'warning');
     };
 })();
