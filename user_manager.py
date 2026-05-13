@@ -109,9 +109,6 @@ class UserManager:
         self.users[username] = user
         self.save_users()
         
-        # Create user's todo file
-        self.create_user_todo_file(username)
-        
         return user, "User created successfully"
     
     def authenticate_user(self, username, password):
@@ -152,6 +149,10 @@ class UserManager:
     def get_user_todo_file(self, username):
         """Get the todo file path for a user"""
         return os.path.join(self.todo_dir, f"todo_{username}.txt")
+
+    def get_user_db_path(self, username):
+        """Get the SQLite DB path for a user"""
+        return os.path.join(self.todo_dir, f"todo_{username}.db")
     
     def delete_user(self, username):
         """Delete a user and their todo file"""
