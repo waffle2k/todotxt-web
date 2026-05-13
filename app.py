@@ -30,13 +30,18 @@ def _notify_clients():
     """Push an update event to all connected SSE clients."""
     dead = []
     with _sse_lock:
-        for q in list(_sse_clients):
-            try:
-                q.put_nowait("update")
-            except queue.Full:
-                dead.append(q)
-        for q in dead:
-            _sse_clients.remove(q)
+        clients = list(_sse_clients)
+    print(f"[SSE] notify_clients: {len(clients)} connected", flush=True)
+    for q in clients:
+        try:
+            q.put_nowait("update")
+        except queue.Full:
+            dead.append(q)
+    if dead:
+        with _sse_lock:
+            for q in dead:
+                if q in _sse_clients:
+                    _sse_clients.remove(q)
 
 
 @login_manager.user_loader
@@ -715,7 +720,8 @@ def events():
             while True:
                 try:
                     event = q.get(timeout=25)
-                    yield f"data: {event}\n\n"
+                    # Pad to flush Cloudflare's per-chunk buffer
+                    yield f"data: {event}\n\n: {' ' * 4096}\n\n"
                 except queue.Empty:
                     # Heartbeat keeps connection alive through proxies
                     yield ": heartbeat\n\n"
