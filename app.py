@@ -708,6 +708,9 @@ def events():
         with _sse_lock:
             _sse_clients.append(q)
         try:
+            # Padding flushes Cloudflare's ~4KB response buffer so events
+            # arrive in the browser immediately rather than being held.
+            yield ": " + " " * 4096 + "\n\n"
             yield "data: connected\n\n"
             while True:
                 try:
