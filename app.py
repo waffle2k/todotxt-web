@@ -394,7 +394,7 @@ def api_search():
     for task_id, task in filtered_tasks:
         tasks_data.append({
             'id': task_id,
-            'description': task.description,
+            'description': task.get_clean_description(),
             'completed': task.completed,
             'priority': task.priority,
             'projects': task.projects,

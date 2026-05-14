@@ -235,9 +235,11 @@ class TodoDb:
         contexts: List[str] = None,
     ) -> TodoTask:
         creation_date = datetime.now().strftime("%Y-%m-%d")
+        inline_p = re.findall(r'(?<!\S)\+(\w+)', description)
+        inline_c = re.findall(r'(?<!\S)@(\w+)', description)
+        projects = list({p.lower() for p in (projects or []) + inline_p})
+        contexts = list({c.lower() for c in (contexts or []) + inline_c})
         clean = _clean_desc(description)
-        projects = projects or []
-        contexts = contexts or []
         raw = _build_raw_line(priority, creation_date, None, False, clean, projects, contexts)
         with _db(self.db_path) as conn:
             task_id = conn.execute(
@@ -256,9 +258,11 @@ class TodoDb:
         projects: List[str] = None,
         contexts: List[str] = None,
     ) -> bool:
+        inline_p = re.findall(r'(?<!\S)\+(\w+)', description)
+        inline_c = re.findall(r'(?<!\S)@(\w+)', description)
+        projects = list({p.lower() for p in (projects or []) + inline_p})
+        contexts = list({c.lower() for c in (contexts or []) + inline_c})
         clean = _clean_desc(description)
-        projects = projects or []
-        contexts = contexts or []
         with _db(self.db_path) as conn:
             row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             if not row:
