@@ -653,7 +653,7 @@ def cmd_command(args):
 
 
 _COMPLETION_BASH = r'''\
-# todo bash completion + fzf helpers
+# todo bash completion + fzf key binding
 # Source this file or place it in ~/.bash_completion.d/todo
 
 # ── Tab completion (subcommands + task IDs) ───────────────────────────────────
@@ -676,25 +676,23 @@ _todo() {
 }
 complete -F _todo todo
 
-# ── fzf helpers (only defined when fzf is available) ─────────────────────────
+# ── Ctrl+F: fzf task picker — inserts task ID at cursor ──────────────────────
 if command -v fzf &>/dev/null; then
-    _todo_fzf_pick() {
-        todo ls 2>/dev/null \
-            | fzf --height=40% --reverse --prompt="todo> " \
-                  --preview="echo {}" --preview-window=up:2 \
-            | awk "{print \$1}"
+    _todo_fzf_insert() {
+        local selected
+        selected=$(todo ls 2>/dev/null | fzf --height=40% --reverse --prompt="todo> " </dev/tty)
+        if [[ -n "$selected" ]]; then
+            local id="${selected%% *}"
+            READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}${id} ${READLINE_LINE:$READLINE_POINT}"
+            READLINE_POINT=$(( READLINE_POINT + ${#id} + 1 ))
+        fi
     }
-
-    todo-do()     { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo do  "$id"; }
-    todo-del()    { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo del -f "$id"; }
-    todo-pri()    { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo pri "$id" "${1:-A}"; }
-    todo-edit()   { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo replace "$id"; }
-    todo-undone() { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo undone "$id"; }
+    bind -x '"\C-f": _todo_fzf_insert'
 fi
 '''
 
 _COMPLETION_ZSH = r'''\
-# todo zsh completion + fzf helpers
+# todo zsh completion + fzf key binding
 # Usage:
 #   eval "$(todo completion zsh)"          # add to ~/.zshrc
 #   todo completion zsh > ~/.zfunc/_todo   # or install as a function file
@@ -729,20 +727,18 @@ _todo() {
 }
 compdef _todo todo
 
-# ── fzf helpers (only defined when fzf is available) ─────────────────────────
+# ── Ctrl+F: fzf task picker — inserts task ID at cursor ──────────────────────
 if command -v fzf &>/dev/null; then
-    _todo_fzf_pick() {
-        todo ls 2>/dev/null \
-            | fzf --height=40% --reverse --prompt="todo> " \
-                  --preview="echo {}" --preview-window=up:2 \
-            | awk "{print \$1}"
+    _todo_fzf_insert() {
+        local selected
+        selected=$(todo ls 2>/dev/null | fzf --height=40% --reverse --prompt="todo> " </dev/tty)
+        if [[ -n "$selected" ]]; then
+            LBUFFER="${LBUFFER}${selected%% *} "
+        fi
+        zle reset-prompt
     }
-
-    todo-do()     { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo do  "$id"; }
-    todo-del()    { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo del -f "$id"; }
-    todo-pri()    { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo pri "$id" "${1:-A}"; }
-    todo-edit()   { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo replace "$id"; }
-    todo-undone() { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo undone "$id"; }
+    zle -N _todo_fzf_insert
+    bindkey '^f' _todo_fzf_insert
 fi
 '''
 
