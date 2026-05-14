@@ -719,13 +719,12 @@ _todo() {
 
     local subcmd="${words[2]}"
     if (( ${id_cmds[(I)$subcmd]} )); then
-        local -a items
+        local -a ids displays
         while IFS= read -r line; do
-            local id="${line%% *}"
-            local desc="${line#* }"
-            items+=("${id}:${desc}")
+            ids+=("${line%% *}")
+            displays+=("$line")
         done < <(todo ls 2>/dev/null)
-        _describe 'task' items
+        compadd -ld displays -a ids
     fi
 }
 compdef _todo todo
