@@ -2,7 +2,7 @@ mod api;
 mod app;
 mod ui;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use app::{App, Mode};
 use api::TodoApi;
 use sha2::{Sha256, Digest};
@@ -12,7 +12,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 
 /// Load config from ~/.config/todotui/config (KEY=VALUE, # comments, blank lines ok).
@@ -91,6 +91,161 @@ fn do_self_update(url: &str) -> Result<()> {
         .into())
 }
 
+fn is_date(s: &str) -> bool {
+    if s.len() != 10 { return false; }
+    let b = s.as_bytes();
+    b[4] == b'-' && b[7] == b'-'
+        && b[..4].iter().all(|c| c.is_ascii_digit())
+        && b[5..7].iter().all(|c| c.is_ascii_digit())
+        && b[8..].iter().all(|c| c.is_ascii_digit())
+}
+
+/// Strip done marker, dates, and priority from a raw todo.txt line for dedup comparison.
+fn normalize_for_dedup(raw: &str) -> String {
+    let mut s = raw.trim();
+
+    // Strip "x " done marker
+    if s.starts_with("x ") {
+        s = &s[2..];
+        // Strip completion date
+        if s.len() > 11 && s.as_bytes()[10] == b' ' && is_date(&s[..10]) {
+            s = &s[11..];
+        }
+    }
+
+    // Strip creation date
+    if s.len() > 11 && s.as_bytes()[10] == b' ' && is_date(&s[..10]) {
+        s = &s[11..];
+    }
+
+    // Strip priority "(X) "
+    if s.len() >= 4
+        && s.starts_with('(')
+        && s.as_bytes().get(1).map_or(false, |c| c.is_ascii_uppercase())
+        && s.as_bytes().get(2) == Some(&b')')
+        && s.as_bytes().get(3) == Some(&b' ')
+    {
+        s = &s[4..];
+    }
+
+    // Strip creation date that may follow priority
+    if s.len() > 11 && s.as_bytes()[10] == b' ' && is_date(&s[..10]) {
+        s = &s[11..];
+    }
+
+    s.trim().to_lowercase()
+}
+
+struct LocalTask {
+    description: String,
+    priority: String,
+    projects: String,
+    contexts: String,
+}
+
+/// Parse an incomplete todo.txt line into fields for api.add_task.
+fn parse_local_line(raw: &str) -> LocalTask {
+    let mut s = raw.trim();
+
+    // Strip creation date
+    if s.len() > 11 && s.as_bytes()[10] == b' ' && is_date(&s[..10]) {
+        s = &s[11..];
+    }
+
+    // Extract priority "(X) "
+    let priority = if s.len() >= 4
+        && s.starts_with('(')
+        && s.as_bytes().get(1).map_or(false, |c| c.is_ascii_uppercase())
+        && s.as_bytes().get(2) == Some(&b')')
+        && s.as_bytes().get(3) == Some(&b' ')
+    {
+        let p = s[1..2].to_string();
+        s = &s[4..];
+        p
+    } else {
+        String::new()
+    };
+
+    // Strip creation date after priority
+    if s.len() > 11 && s.as_bytes()[10] == b' ' && is_date(&s[..10]) {
+        s = &s[11..];
+    }
+
+    let description = s.trim().to_string();
+
+    let projects = description
+        .split_whitespace()
+        .filter(|w| w.starts_with('+') && w.len() > 1)
+        .map(|w| &w[1..])
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let contexts = description
+        .split_whitespace()
+        .filter(|w| w.starts_with('@') && w.len() > 1)
+        .map(|w| &w[1..])
+        .collect::<Vec<_>>()
+        .join(",");
+
+    LocalTask { description, priority, projects, contexts }
+}
+
+fn run_import(api: &mut TodoApi, file_path: &str) -> Result<()> {
+    let contents = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Cannot read '{}'", file_path))?;
+
+    // Fetch all server tasks (complete and incomplete) for dedup
+    let server_tasks = api.list_tasks("", "all")?;
+    let server_norms: HashSet<String> = server_tasks
+        .iter()
+        .map(|t| normalize_for_dedup(&t.raw_line))
+        .collect();
+
+    let mut added = 0usize;
+    let mut skipped_dup = 0usize;
+    let mut skipped_done = 0usize;
+
+    let start = std::time::Instant::now();
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+
+        // Skip locally-done tasks — don't add a completed task as incomplete on the server
+        if line.starts_with("x ") {
+            skipped_done += 1;
+            continue;
+        }
+
+        let norm = normalize_for_dedup(line);
+        if server_norms.contains(&norm) {
+            skipped_dup += 1;
+            continue;
+        }
+
+        let task = parse_local_line(line);
+        api.add_task(&task.description, &task.priority, &task.projects, &task.contexts)?;
+        added += 1;
+    }
+
+    let elapsed = start.elapsed();
+    let elapsed_ms = elapsed.as_millis();
+    let per_record_ms = if added > 0 { elapsed_ms / added as u128 } else { 0 };
+
+    println!(
+        "Import complete: {} added, {} skipped (already on server), {} skipped (locally done)",
+        added, skipped_dup, skipped_done
+    );
+    if added > 0 {
+        println!(
+            "Timing: {:.2}s total, ~{}ms per record",
+            elapsed.as_secs_f64(),
+            per_record_ms
+        );
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let config = load_config();
 
@@ -102,8 +257,12 @@ fn main() -> Result<()> {
 
     try_self_update(&url);
 
-    let pick_mode = std::env::args().any(|a| a == "--pick" || a == "-p");
-    let list_mode = std::env::args().any(|a| a == "--list" || a == "-l");
+    let args: Vec<String> = std::env::args().collect();
+    let pick_mode = args.iter().any(|a| a == "--pick" || a == "-p");
+    let list_mode = args.iter().any(|a| a == "--list" || a == "-l");
+    let import_file = args.windows(2)
+        .find(|w| w[0] == "--import" || w[0] == "-I")
+        .map(|w| w[1].clone());
 
     let mut api = TodoApi::new(&url, &user, &pass)?;
 
@@ -113,6 +272,10 @@ fn main() -> Result<()> {
             println!("{}\t{}", t.id, t.raw_line);
         }
         return Ok(());
+    }
+
+    if let Some(ref path) = import_file {
+        return run_import(&mut api, path);
     }
 
     let mut app = App::new(api, pick_mode);

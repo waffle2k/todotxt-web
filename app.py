@@ -204,7 +204,7 @@ def index():
     for task in all_tasks:
         if not task.completed:
             if task.priority:
-                priority_counts[task.priority] += 1
+                priority_counts[task.priority] = priority_counts.get(task.priority, 0) + 1
             else:
                 priority_counts['None'] += 1
 
@@ -619,7 +619,7 @@ def api_get_todo_info():
         for task in all_tasks:
             if not task.completed:
                 if task.priority:
-                    priority_counts[task.priority] += 1
+                    priority_counts[task.priority] = priority_counts.get(task.priority, 0) + 1
                 else:
                     priority_counts['None'] += 1
 
