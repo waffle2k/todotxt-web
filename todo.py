@@ -652,7 +652,7 @@ def cmd_command(args):
     fn(args[1:])
 
 
-_COMPLETION_BASH = '''\
+_COMPLETION_BASH = r'''\
 # todo bash completion + fzf helpers
 # Source this file or place it in ~/.bash_completion.d/todo
 
@@ -693,7 +693,7 @@ if command -v fzf &>/dev/null; then
 fi
 '''
 
-_COMPLETION_ZSH = '''\
+_COMPLETION_ZSH = r'''\
 # todo zsh completion + fzf helpers
 # Usage:
 #   eval "$(todo completion zsh)"          # add to ~/.zshrc
