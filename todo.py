@@ -719,9 +719,13 @@ _todo() {
 
     local subcmd="${words[2]}"
     if (( ${id_cmds[(I)$subcmd]} )); then
-        local -a ids
-        ids=(${(f)"$(todo ls 2>/dev/null | awk '{print $1}')"})
-        _describe 'task id' ids
+        local -a items
+        while IFS= read -r line; do
+            local id="${line%% *}"
+            local desc="${line#* }"
+            items+=("${id}:${desc}")
+        done < <(todo ls 2>/dev/null)
+        _describe 'task' items
     fi
 }
 compdef _todo todo
