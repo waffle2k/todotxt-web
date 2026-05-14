@@ -49,14 +49,16 @@ macos-x86:
 # Build all archs and publish — clients self-update on next launch
 release: linux-arm linux-x86 macos-arm macos-x86
 	mkdir -p $(PUBLISH_DIR)
-	cp $(PI_BIN)       $(PUBLISH_DIR)/todotui-linux-aarch64
-	cp $(X86_BIN)      $(PUBLISH_DIR)/todotui-linux-x86_64
+	cp $(PI_BIN)        $(PUBLISH_DIR)/todotui-linux-aarch64
+	cp $(X86_BIN)       $(PUBLISH_DIR)/todotui-linux-x86_64
 	cp $(MACOS_ARM_BIN) $(PUBLISH_DIR)/todotui-macos-aarch64
 	cp $(MACOS_X86_BIN) $(PUBLISH_DIR)/todotui-macos-x86_64
+	cp ../todo.py       $(PUBLISH_DIR)/todo
 	@for f in linux-aarch64 linux-x86_64 macos-aarch64 macos-x86_64; do \
 	  sha256sum $(PUBLISH_DIR)/todotui-$$f | awk '{print $$1}' > $(PUBLISH_DIR)/todotui-$$f.sha256; \
 	  echo "Published $$f: $$(cat $(PUBLISH_DIR)/todotui-$$f.sha256)"; \
 	done
+	@echo "Published todo"
 
 # Force-push aarch64 binary directly to Pi hosts (for initial install / migration)
 push-pi: linux-arm

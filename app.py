@@ -644,7 +644,7 @@ def api_get_todo_info():
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
 
 import re as _re
-_DOWNLOAD_RE = _re.compile(r'^todotui-[a-z]+-[a-z0-9_]+(\.sha256)?$')
+_DOWNLOAD_RE = _re.compile(r'^(todo|todotui-[a-z]+-[a-z0-9_]+)(\.sha256)?$')
 
 @app.route('/download/<filename>')
 def download_file(filename):
@@ -661,7 +661,7 @@ _INSTALL_SH = """\
 #!/bin/sh
 set -e
 BASE_URL="{base_url}"
-DEST="${{TODOTUI_DEST:-$HOME/bin/todotui}}"
+BIN_DIR="${{BIN_DIR:-$HOME/bin}}"
 
 # Normalise OS name to match binary naming
 case "$(uname -s)" in
@@ -670,13 +670,28 @@ case "$(uname -s)" in
   *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
 ARCH=$(uname -m)
-NAME="todotui-$OS-$ARCH"
 
-mkdir -p "$(dirname "$DEST")"
-echo "Downloading $NAME ..."
-curl -fsSL "$BASE_URL/download/$NAME" -o "$DEST"
-chmod +x "$DEST"
-echo "Installed: $DEST"
+mkdir -p "$BIN_DIR"
+
+# todotui — compiled binary
+TODOTUI="${{TODOTUI_DEST:-$BIN_DIR/todotui}}"
+echo "Downloading todotui-$OS-$ARCH ..."
+curl -fsSL "$BASE_URL/download/todotui-$OS-$ARCH" -o "$TODOTUI"
+chmod +x "$TODOTUI"
+echo "Installed: $TODOTUI"
+
+# todo — Python CLI (requires python3 + requests)
+TODO="${{TODO_DEST:-$BIN_DIR/todo}}"
+echo "Downloading todo ..."
+curl -fsSL "$BASE_URL/download/todo" -o "$TODO"
+chmod +x "$TODO"
+echo "Installed: $TODO"
+
+echo ""
+echo "Configure via ~/.config/todotui/config:"
+echo "  TODO_URL=https://your-todo-server"
+echo "  TODO_USER=youruser"
+echo "  TODO_PASS=yourpass"
 """
 
 @app.route('/install.sh')
