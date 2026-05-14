@@ -61,3 +61,7 @@ docker-compose*
 
 # Other
 .editorconfig
+
+# Rust cross-compile artifacts
+todotui/target*/
+todotui/target/
