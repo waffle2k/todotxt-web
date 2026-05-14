@@ -651,7 +651,10 @@ def download_file(filename):
     if not _DOWNLOAD_RE.match(filename):
         abort(404)
     downloads_dir = os.path.join(user_manager.todo_dir, 'downloads')
-    return send_from_directory(downloads_dir, filename, as_attachment=True)
+    response = send_from_directory(downloads_dir, filename, as_attachment=True)
+    if filename.endswith('.sha256'):
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 _INSTALL_SH = """\
