@@ -653,32 +653,51 @@ def cmd_command(args):
 
 
 _COMPLETION_BASH = '''\
-# todo bash completion — source this file or add to ~/.bash_completion.d/todo
+# todo bash completion with fzf support
+# Source this file or place it in ~/.bash_completion.d/todo
+# Requires fzf shell integration for fzf task-id selection (eval "$(fzf --bash)")
+
+_todo_fzf_post() {
+    # Extract the numeric task ID from a "todo ls" line
+    awk '{print $1}'
+}
+
 _todo() {
-    local cur prev
-    cur="${COMP_WORDS[COMP_CWORD]}"
+    local cur="${COMP_WORDS[COMP_CWORD]}"
     local cmds="add a addm append app archive command deduplicate del rm depri dp do d done help list ls listall lsa listcon lsc listproj lsprj listpri lsp listfile lf move mv prepend prep pri p replace report shorthelp undone u completion"
     local id_cmds="del rm do d done depri dp undone u pri p append app prepend prep replace"
 
     if [[ $COMP_CWORD -eq 1 ]]; then
         COMPREPLY=($(compgen -W "$cmds" -- "$cur"))
-    else
-        local subcmd="${COMP_WORDS[1]}"
-        if [[ " $id_cmds " == *" $subcmd "* ]]; then
+        return
+    fi
+
+    local subcmd="${COMP_WORDS[1]}"
+    if [[ " $id_cmds " == *" $subcmd "* ]]; then
+        # Use fzf for interactive task selection when available
+        if declare -f _fzf_complete &>/dev/null; then
+            _fzf_complete --height 40% --reverse --prompt "todo> " --preview \
+                'echo {}' -- "$@" < <(todo ls 2>/dev/null)
+        else
             local ids
             ids=$(todo ls 2>/dev/null | awk '{print $1}')
             COMPREPLY=($(compgen -W "$ids" -- "$cur"))
         fi
     fi
 }
+
 complete -F _todo todo
 '''
 
 _COMPLETION_ZSH = '''\
-# todo zsh completion — add `todo completion zsh > ~/.zfunc/_todo` then `autoload -Uz _todo`
-# or: eval "$(todo completion zsh)"
+# todo zsh completion with fzf support
+# Usage:
+#   eval "$(todo completion zsh)"          # add to ~/.zshrc
+#   todo completion zsh > ~/.zfunc/_todo   # or install as a function file
+
 _todo() {
-    local cmds=(
+    local -a cmds id_cmds
+    cmds=(
         add a addm 'append:append text to a task' app archive command deduplicate
         'del:delete a task' rm 'depri:remove priority' dp
         'do:mark done' d done help 'list:list tasks' ls listall lsa
@@ -686,19 +705,31 @@ _todo() {
         move mv prepend prep 'pri:set priority' p replace report shorthelp
         'undone:mark incomplete' u completion
     )
-    local id_cmds=(del rm do d done depri dp undone u pri p append app prepend prep replace)
+    id_cmds=(del rm do d done depri dp undone u pri p append app prepend prep replace)
 
     if (( CURRENT == 2 )); then
         _describe 'subcommand' cmds
-    else
-        local subcmd="${words[2]}"
-        if (( ${id_cmds[(I)$subcmd]} )); then
-            local ids
+        return
+    fi
+
+    local subcmd="${words[2]}"
+    if (( ${id_cmds[(I)$subcmd]} )); then
+        if command -v fzf &>/dev/null; then
+            # fzf: show full task lines, return just the ID
+            local selected
+            selected=$(todo ls 2>/dev/null | fzf --height 40% --reverse --prompt "todo> " \
+                --preview 'echo {}' --preview-window=up:1)
+            if [[ -n "$selected" ]]; then
+                compadd -- "${selected%% *}"
+            fi
+        else
+            local -a ids
             ids=(${(f)"$(todo ls 2>/dev/null | awk '{print $1}')"})
             _describe 'task id' ids
         fi
     fi
 }
+
 compdef _todo todo
 '''
 
