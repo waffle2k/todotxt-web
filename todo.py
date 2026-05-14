@@ -653,15 +653,10 @@ def cmd_command(args):
 
 
 _COMPLETION_BASH = '''\
-# todo bash completion with fzf support
+# todo bash completion + fzf helpers
 # Source this file or place it in ~/.bash_completion.d/todo
-# Requires fzf shell integration for fzf task-id selection (eval "$(fzf --bash)")
 
-_todo_fzf_post() {
-    # Extract the numeric task ID from a "todo ls" line
-    awk '{print $1}'
-}
-
+# ── Tab completion (subcommands + task IDs) ───────────────────────────────────
 _todo() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local cmds="add a addm append app archive command deduplicate del rm depri dp do d done help list ls listall lsa listcon lsc listproj lsprj listpri lsp listfile lf move mv prepend prep pri p replace report shorthelp undone u completion"
@@ -674,27 +669,37 @@ _todo() {
 
     local subcmd="${COMP_WORDS[1]}"
     if [[ " $id_cmds " == *" $subcmd "* ]]; then
-        # Use fzf for interactive task selection when available
-        if declare -f _fzf_complete &>/dev/null; then
-            _fzf_complete --height 40% --reverse --prompt "todo> " --preview \
-                'echo {}' -- "$@" < <(todo ls 2>/dev/null)
-        else
-            local ids
-            ids=$(todo ls 2>/dev/null | awk '{print $1}')
-            COMPREPLY=($(compgen -W "$ids" -- "$cur"))
-        fi
+        local ids
+        ids=$(todo ls 2>/dev/null | awk '{print $1}')
+        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
     fi
 }
-
 complete -F _todo todo
+
+# ── fzf helpers (only defined when fzf is available) ─────────────────────────
+if command -v fzf &>/dev/null; then
+    _todo_fzf_pick() {
+        todo ls 2>/dev/null \
+            | fzf --height=40% --reverse --prompt="todo> " \
+                  --preview="echo {}" --preview-window=up:2 \
+            | awk "{print \$1}"
+    }
+
+    todo-do()     { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo do  "$id"; }
+    todo-del()    { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo del -f "$id"; }
+    todo-pri()    { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo pri "$id" "${1:-A}"; }
+    todo-edit()   { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo replace "$id"; }
+    todo-undone() { local id; id=$(_todo_fzf_pick) && [[ -n "$id" ]] && todo undone "$id"; }
+fi
 '''
 
 _COMPLETION_ZSH = '''\
-# todo zsh completion with fzf support
+# todo zsh completion + fzf helpers
 # Usage:
 #   eval "$(todo completion zsh)"          # add to ~/.zshrc
 #   todo completion zsh > ~/.zfunc/_todo   # or install as a function file
 
+# ── Tab completion (subcommands + task IDs) ───────────────────────────────────
 _todo() {
     local -a cmds id_cmds
     cmds=(
@@ -714,23 +719,28 @@ _todo() {
 
     local subcmd="${words[2]}"
     if (( ${id_cmds[(I)$subcmd]} )); then
-        if command -v fzf &>/dev/null; then
-            # fzf: show full task lines, return just the ID
-            local selected
-            selected=$(todo ls 2>/dev/null | fzf --height 40% --reverse --prompt "todo> " \
-                --preview 'echo {}' --preview-window=up:1)
-            if [[ -n "$selected" ]]; then
-                compadd -- "${selected%% *}"
-            fi
-        else
-            local -a ids
-            ids=(${(f)"$(todo ls 2>/dev/null | awk '{print $1}')"})
-            _describe 'task id' ids
-        fi
+        local -a ids
+        ids=(${(f)"$(todo ls 2>/dev/null | awk '{print $1}')"})
+        _describe 'task id' ids
     fi
 }
-
 compdef _todo todo
+
+# ── fzf helpers (only defined when fzf is available) ─────────────────────────
+if command -v fzf &>/dev/null; then
+    _todo_fzf_pick() {
+        todo ls 2>/dev/null \
+            | fzf --height=40% --reverse --prompt="todo> " \
+                  --preview="echo {}" --preview-window=up:2 \
+            | awk "{print \$1}"
+    }
+
+    todo-do()     { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo do  "$id"; }
+    todo-del()    { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo del -f "$id"; }
+    todo-pri()    { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo pri "$id" "${1:-A}"; }
+    todo-edit()   { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo replace "$id"; }
+    todo-undone() { local id=$(_todo_fzf_pick); [[ -n "$id" ]] && todo undone "$id"; }
+fi
 '''
 
 
