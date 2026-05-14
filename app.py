@@ -688,6 +688,25 @@ chmod +x "$TODO"
 echo "Installed: $TODO"
 
 echo ""
+
+# Neovim plugin — installed automatically when nvim + lazy.nvim are detected
+if command -v nvim >/dev/null 2>&1; then
+  NVIM_LUA="${{NVIM_LUA:-$HOME/.config/nvim/lua}}"
+  NVIM_PLUGINS="$NVIM_LUA/plugins"
+  if [ -d "$NVIM_PLUGINS" ]; then
+    echo "Neovim detected — installing todo.lua plugin ..."
+    curl -fsSL "$BASE_URL/nvim/todo.lua"         -o "$NVIM_LUA/todo.lua"
+    curl -fsSL "$BASE_URL/nvim/plugins/todo.lua" -o "$NVIM_PLUGINS/todo.lua"
+    echo "Installed: $NVIM_LUA/todo.lua"
+    echo "Installed: $NVIM_PLUGINS/todo.lua"
+    echo "Run :Lazy sync in neovim to activate."
+  else
+    echo "Neovim found but no lazy.nvim plugins dir — skipping plugin install."
+    echo "  (expected: $NVIM_PLUGINS)"
+  fi
+fi
+
+echo ""
 echo "Configure via ~/.config/todotui/config:"
 echo "  TODO_URL=https://your-todo-server"
 echo "  TODO_USER=youruser"
@@ -702,6 +721,16 @@ def install_sh():
         _INSTALL_SH.format(base_url=base_url),
         mimetype='text/plain',
     )
+
+
+_NVIM_DIR = os.path.join(os.path.dirname(__file__), 'nvim')
+_NVIM_RE  = _re.compile(r'^(plugins/)?todo\.lua$')
+
+@app.route('/nvim/<path:filename>')
+def nvim_file(filename):
+    if not _NVIM_RE.match(filename):
+        abort(404)
+    return send_from_directory(_NVIM_DIR, filename, mimetype='text/plain')
 
 
 @app.route('/events')
