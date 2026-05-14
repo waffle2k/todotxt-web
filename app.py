@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, Response, stream_with_context, send_from_directory, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from user_manager import UserManager
 import todo_db
@@ -642,6 +642,40 @@ def api_get_todo_info():
 
     except Exception as e:
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+import re as _re
+_DOWNLOAD_RE = _re.compile(r'^todotui-[a-z0-9_]+(\.sha256)?$')
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    if not _DOWNLOAD_RE.match(filename):
+        abort(404)
+    downloads_dir = os.path.join(user_manager.todo_dir, 'downloads')
+    return send_from_directory(downloads_dir, filename, as_attachment=True)
+
+
+_INSTALL_SH = """\
+#!/bin/sh
+set -e
+ARCH=$(uname -m)
+BASE_URL="{base_url}"
+DEST="${{TODOTUI_DEST:-$HOME/bin/todotui}}"
+mkdir -p "$(dirname "$DEST")"
+echo "Downloading todotui-$ARCH ..."
+curl -fsSL "$BASE_URL/download/todotui-$ARCH" -o "$DEST"
+chmod +x "$DEST"
+echo "Installed: $DEST"
+"""
+
+@app.route('/install.sh')
+def install_sh():
+    proto = request.headers.get('X-Forwarded-Proto', request.scheme)
+    base_url = f"{proto}://{request.host}"
+    return app.response_class(
+        _INSTALL_SH.format(base_url=base_url),
+        mimetype='text/plain',
+    )
+
 
 @app.route('/events')
 @login_required

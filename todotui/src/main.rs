@@ -5,6 +5,7 @@ mod ui;
 use anyhow::{bail, Result};
 use app::{App, Mode};
 use api::TodoApi;
+use sha2::{Sha256, Digest};
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
@@ -37,6 +38,58 @@ fn get_cfg(key: &str, config: &HashMap<String, String>) -> Option<String> {
     std::env::var(key).ok().or_else(|| config.get(key).cloned())
 }
 
+/// Check if the server has a newer binary; if so, download it, replace self, and re-exec.
+/// All errors are silently ignored — update is best-effort.
+fn try_self_update(url: &str) {
+    let _ = do_self_update(url);
+}
+
+fn do_self_update(url: &str) -> Result<()> {
+    let arch = std::env::consts::ARCH; // "aarch64", "x86_64", etc.
+    let binary_name = format!("todotui-{}", arch);
+
+    let exe = std::env::current_exe()?;
+    let current_bytes = std::fs::read(&exe)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&current_bytes);
+    let current_hash = hex::encode(hasher.finalize());
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+
+    let remote_hash = client
+        .get(format!("{}/download/{}.sha256", url, binary_name))
+        .send()?
+        .text()?
+        .trim()
+        .to_string();
+
+    if remote_hash == current_hash {
+        return Ok(());
+    }
+
+    eprintln!("todotui: update available, downloading...");
+    let bytes = client
+        .get(format!("{}/download/{}", url, binary_name))
+        .send()?
+        .bytes()?;
+
+    let tmp = exe.with_extension("tmp");
+    std::fs::write(&tmp, &bytes)?;
+
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::rename(&tmp, &exe)?;
+
+    // Replace this process with the new binary
+    use std::os::unix::process::CommandExt;
+    Err(std::process::Command::new(&exe)
+        .args(std::env::args().skip(1))
+        .exec()
+        .into())
+}
+
 fn main() -> Result<()> {
     let config = load_config();
 
@@ -45,6 +98,8 @@ fn main() -> Result<()> {
         .ok_or(()).or_else(|_| bail!("TODO_USER not set (env var or ~/.config/todotui/config)"))?;
     let pass = get_cfg("TODO_PASS", &config)
         .ok_or(()).or_else(|_| bail!("TODO_PASS not set (env var or ~/.config/todotui/config)"))?;
+
+    try_self_update(&url);
 
     let pick_mode = std::env::args().any(|a| a == "--pick" || a == "-p");
     let list_mode = std::env::args().any(|a| a == "--list" || a == "-l");
