@@ -218,7 +218,7 @@ impl App {
             candidates.retain(|c| c.to_lowercase().starts_with(&partial_lower));
             candidates.sort();
             self.completions = candidates;
-            self.completion_cursor = self.completion_cursor.min(self.completions.len().saturating_sub(1));
+            self.completion_cursor = 0;
         } else {
             self.completions.clear();
         }

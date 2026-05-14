@@ -187,13 +187,15 @@ fn draw_completion_dropdown(f: &mut Frame, app: &App, area: Rect) {
 
     let popup_width = area.width.saturating_sub(8).max(20);
     let popup_x = (area.width.saturating_sub(popup_width)) / 2;
-    let input_bottom = area.height / 2 + 2; // input popup ends here (y + height = h/2-2 + 4)
+    let input_top = area.height / 2 - 2; // top of input popup
 
     const MAX_VISIBLE: usize = 6;
-    let visible = app.completions.len().min(MAX_VISIBLE) as u16;
-    let dropdown_rect = Rect::new(popup_x + 1, input_bottom, popup_width - 2, visible);
+    // +1 for the top border row
+    let visible = app.completions.len().min(MAX_VISIBLE) as u16 + 1;
 
-    if dropdown_rect.bottom() > area.height { return; }
+    // render above the input popup; bail if there's not enough room
+    if input_top < visible { return; }
+    let dropdown_rect = Rect::new(popup_x + 1, input_top - visible, popup_width - 2, visible);
 
     f.render_widget(Clear, dropdown_rect);
 
@@ -210,7 +212,7 @@ fn draw_completion_dropdown(f: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM).border_style(bright_style()))
+        .block(Block::default().borders(Borders::LEFT | Borders::RIGHT | Borders::TOP).border_style(bright_style()))
         .style(base_style());
 
     f.render_widget(list, dropdown_rect);
