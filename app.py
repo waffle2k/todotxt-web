@@ -644,7 +644,7 @@ def api_get_todo_info():
         return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
 
 import re as _re
-_DOWNLOAD_RE = _re.compile(r'^todotui-[a-z0-9_]+(\.sha256)?$')
+_DOWNLOAD_RE = _re.compile(r'^todotui-[a-z]+-[a-z0-9_]+(\.sha256)?$')
 
 @app.route('/download/<filename>')
 def download_file(filename):
@@ -660,12 +660,21 @@ def download_file(filename):
 _INSTALL_SH = """\
 #!/bin/sh
 set -e
-ARCH=$(uname -m)
 BASE_URL="{base_url}"
 DEST="${{TODOTUI_DEST:-$HOME/bin/todotui}}"
+
+# Normalise OS name to match binary naming
+case "$(uname -s)" in
+  Linux)  OS=linux  ;;
+  Darwin) OS=macos  ;;
+  *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+ARCH=$(uname -m)
+NAME="todotui-$OS-$ARCH"
+
 mkdir -p "$(dirname "$DEST")"
-echo "Downloading todotui-$ARCH ..."
-curl -fsSL "$BASE_URL/download/todotui-$ARCH" -o "$DEST"
+echo "Downloading $NAME ..."
+curl -fsSL "$BASE_URL/download/$NAME" -o "$DEST"
 chmod +x "$DEST"
 echo "Installed: $DEST"
 """

@@ -45,8 +45,9 @@ fn try_self_update(url: &str) {
 }
 
 fn do_self_update(url: &str) -> Result<()> {
-    let arch = std::env::consts::ARCH; // "aarch64", "x86_64", etc.
-    let binary_name = format!("todotui-{}", arch);
+    let os   = std::env::consts::OS;   // "linux", "macos"
+    let arch = std::env::consts::ARCH; // "aarch64", "x86_64"
+    let binary_name = format!("todotui-{}-{}", os, arch);
 
     let exe = std::env::current_exe()?;
     let current_bytes = std::fs::read(&exe)?;
