@@ -69,6 +69,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if matches!(app.mode, Mode::AddTask | Mode::EditTask) {
         draw_input_popup(f, app, area);
+        draw_completion_dropdown(f, app, area);
     }
 }
 
@@ -179,6 +180,40 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let style = dim_style();
     let para = Paragraph::new(help).style(style);
     f.render_widget(para, area);
+}
+
+fn draw_completion_dropdown(f: &mut Frame, app: &App, area: Rect) {
+    if app.completions.is_empty() { return; }
+
+    let popup_width = area.width.saturating_sub(8).max(20);
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let input_bottom = area.height / 2 + 2; // input popup ends here (y + height = h/2-2 + 4)
+
+    const MAX_VISIBLE: usize = 6;
+    let visible = app.completions.len().min(MAX_VISIBLE) as u16;
+    let dropdown_rect = Rect::new(popup_x + 1, input_bottom, popup_width - 2, visible);
+
+    if dropdown_rect.bottom() > area.height { return; }
+
+    f.render_widget(Clear, dropdown_rect);
+
+    let items: Vec<ListItem> = app.completions.iter().enumerate()
+        .take(MAX_VISIBLE)
+        .map(|(i, name)| {
+            let style = if i == app.completion_cursor {
+                Style::default().fg(BLACK).bg(GREEN).add_modifier(Modifier::BOLD)
+            } else {
+                base_style()
+            };
+            ListItem::new(format!(" {} ", name)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM).border_style(bright_style()))
+        .style(base_style());
+
+    f.render_widget(list, dropdown_rect);
 }
 
 fn draw_input_popup(f: &mut Frame, app: &App, area: Rect) {

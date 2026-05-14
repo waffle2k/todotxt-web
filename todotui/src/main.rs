@@ -231,13 +231,36 @@ fn handle_normal(app: &mut App, code: KeyCode, _mods: KeyModifiers) -> Result<()
 }
 
 fn handle_input_mode(app: &mut App, code: KeyCode, action: InputAction) -> Result<()> {
+    let is_task = matches!(action, InputAction::Add | InputAction::Edit);
+
     match code {
         KeyCode::Esc => {
-            app.mode = Mode::Normal;
-            app.input.clear();
-            app.input_cursor = 0;
-            if matches!(action, InputAction::Filter) {
-                app.apply_filter(); // restore to last committed filter
+            if is_task && !app.completions.is_empty() {
+                app.completions.clear();
+                app.completion_cursor = 0;
+            } else {
+                app.mode = Mode::Normal;
+                app.input.clear();
+                app.input_cursor = 0;
+                app.completions.clear();
+                if matches!(action, InputAction::Filter) {
+                    app.apply_filter();
+                }
+            }
+        }
+        KeyCode::Tab => {
+            if is_task && !app.completions.is_empty() {
+                app.apply_completion();
+            }
+        }
+        KeyCode::Down => {
+            if is_task && !app.completions.is_empty() {
+                app.completion_next();
+            }
+        }
+        KeyCode::Up => {
+            if is_task && !app.completions.is_empty() {
+                app.completion_prev();
             }
         }
         KeyCode::Enter => match action {
@@ -247,15 +270,13 @@ fn handle_input_mode(app: &mut App, code: KeyCode, action: InputAction) -> Resul
         },
         KeyCode::Backspace => {
             app.input_backspace();
-            if matches!(action, InputAction::Filter) {
-                app.apply_live_filter();
-            }
+            if is_task { app.update_completions(); }
+            else       { app.apply_live_filter(); }
         }
         KeyCode::Char(c) => {
             app.input_char(c);
-            if matches!(action, InputAction::Filter) {
-                app.apply_live_filter();
-            }
+            if is_task { app.update_completions(); }
+            else       { app.apply_live_filter(); }
         }
         _ => {}
     }

@@ -29,6 +29,8 @@ pub struct App {
     #[allow(dead_code)]
     pub pick_mode: bool,
     editing_id: Option<usize>,
+    pub completions: Vec<String>,
+    pub completion_cursor: usize,
 }
 
 impl App {
@@ -49,6 +51,8 @@ impl App {
             show_banner: true,
             pick_mode,
             editing_id: None,
+            completions: vec![],
+            completion_cursor: 0,
         }
     }
 
@@ -188,6 +192,67 @@ impl App {
         self.input_cursor = self.input.len();
     }
 
+    /// Rebuild completions based on `@` / `+` token immediately before the cursor.
+    pub fn update_completions(&mut self) {
+        let before = &self.input[..self.input_cursor];
+        // find the last @ or + that isn't preceded by a non-space (i.e. it starts a token)
+        let trigger_pos = before.rfind(|c| c == '@' || c == '+');
+        if let Some(pos) = trigger_pos {
+            let partial = &before[pos + 1..];
+            // dismiss if the partial contains a space — we've moved past this token
+            if partial.contains(' ') {
+                self.completions.clear();
+                return;
+            }
+            let trigger = before.chars().nth(pos).unwrap();
+            let partial_lower = partial.to_lowercase();
+            let mut candidates: Vec<String> = if trigger == '@' {
+                let mut set = HashSet::new();
+                for t in &self.tasks { for c in &t.contexts { set.insert(c.clone()); } }
+                set.into_iter().collect()
+            } else {
+                let mut set = HashSet::new();
+                for t in &self.tasks { for p in &t.projects { set.insert(p.clone()); } }
+                set.into_iter().collect()
+            };
+            candidates.retain(|c| c.to_lowercase().starts_with(&partial_lower));
+            candidates.sort();
+            self.completions = candidates;
+            self.completion_cursor = self.completion_cursor.min(self.completions.len().saturating_sub(1));
+        } else {
+            self.completions.clear();
+        }
+    }
+
+    /// Insert the highlighted completion into the input, replacing the partial token.
+    pub fn apply_completion(&mut self) {
+        if self.completions.is_empty() { return; }
+        let selected = self.completions[self.completion_cursor].clone();
+        let before = self.input[..self.input_cursor].to_string();
+        if let Some(pos) = before.rfind(|c: char| c == '@' || c == '+') {
+            let after = &self.input[self.input_cursor..];
+            let space = if after.starts_with(' ') { "" } else { " " };
+            self.input = format!("{}{}{}{}", &self.input[..=pos], selected, space, after);
+            self.input_cursor = pos + 1 + selected.len() + space.len();
+        }
+        self.completions.clear();
+        self.completion_cursor = 0;
+    }
+
+    pub fn completion_next(&mut self) {
+        if !self.completions.is_empty() {
+            self.completion_cursor = (self.completion_cursor + 1) % self.completions.len();
+        }
+    }
+
+    pub fn completion_prev(&mut self) {
+        if !self.completions.is_empty() {
+            self.completion_cursor = self.completion_cursor
+                .checked_sub(1)
+                .unwrap_or(self.completions.len() - 1);
+        }
+    }
+
     pub fn confirm_add(&mut self) -> Result<()> {
         let raw = self.input.trim().to_string();
         if !raw.is_empty() {
@@ -196,6 +261,7 @@ impl App {
         self.mode = Mode::Normal;
         self.input.clear();
         self.input_cursor = 0;
+        self.completions.clear();
         self.refresh()
     }
 
@@ -216,6 +282,7 @@ impl App {
         self.editing_id = None;
         self.input.clear();
         self.input_cursor = 0;
+        self.completions.clear();
         self.refresh()
     }
 
