@@ -236,14 +236,27 @@ fn handle_input_mode(app: &mut App, code: KeyCode, action: InputAction) -> Resul
             app.mode = Mode::Normal;
             app.input.clear();
             app.input_cursor = 0;
+            if matches!(action, InputAction::Filter) {
+                app.apply_filter(); // restore to last committed filter
+            }
         }
         KeyCode::Enter => match action {
             InputAction::Filter => app.confirm_filter(),
             InputAction::Add    => app.confirm_add().unwrap_or_else(|e| app.status = format!("Error: {e}")),
             InputAction::Edit   => app.confirm_edit().unwrap_or_else(|e| app.status = format!("Error: {e}")),
         },
-        KeyCode::Backspace => app.input_backspace(),
-        KeyCode::Char(c)   => app.input_char(c),
+        KeyCode::Backspace => {
+            app.input_backspace();
+            if matches!(action, InputAction::Filter) {
+                app.apply_live_filter();
+            }
+        }
+        KeyCode::Char(c) => {
+            app.input_char(c);
+            if matches!(action, InputAction::Filter) {
+                app.apply_live_filter();
+            }
+        }
         _ => {}
     }
     Ok(())

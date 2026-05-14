@@ -60,11 +60,11 @@ impl App {
         Ok(())
     }
 
-    pub fn apply_filter(&mut self) {
-        if self.filter.is_empty() {
+    fn filter_by(&mut self, pattern: &str) {
+        if pattern.is_empty() {
             self.filtered = (0..self.tasks.len()).collect();
         } else {
-            match Regex::new(&self.filter) {
+            match Regex::new(pattern) {
                 Ok(re) => {
                     self.filtered = (0..self.tasks.len())
                         .filter(|&i| re.is_match(&self.tasks[i].raw_line))
@@ -72,7 +72,7 @@ impl App {
                 }
                 Err(_) => {
                     // fallback to literal substring match on regex error
-                    let lower = self.filter.to_lowercase();
+                    let lower = pattern.to_lowercase();
                     self.filtered = (0..self.tasks.len())
                         .filter(|&i| self.tasks[i].raw_line.to_lowercase().contains(&lower))
                         .collect();
@@ -80,6 +80,17 @@ impl App {
             }
         }
         self.cursor = self.cursor.min(self.filtered.len().saturating_sub(1));
+    }
+
+    pub fn apply_filter(&mut self) {
+        let pattern = self.filter.clone();
+        self.filter_by(&pattern);
+    }
+
+    /// Filter live against the current input without committing self.filter.
+    pub fn apply_live_filter(&mut self) {
+        let pattern = self.input.clone();
+        self.filter_by(&pattern);
     }
 
     pub fn current_task(&self) -> Option<&Task> {

@@ -148,7 +148,7 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_filter_bar(f: &mut Frame, app: &App, area: Rect) {
     let content = if app.mode == Mode::Filter {
-        format!(" /{}_", app.input)
+        format!(" /{}_  ({} tasks)", app.input, app.filtered.len())
     } else if !app.filter.is_empty() {
         format!(" filter: {} ({} tasks)", app.filter, app.filtered.len())
     } else {
@@ -161,7 +161,7 @@ fn draw_filter_bar(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let help = if app.mode == Mode::Filter {
-        " Enter:apply  Esc:cancel".to_string()
+        " Enter:commit  Esc:cancel".to_string()
     } else if app.mode == Mode::ConfirmDelete {
         " y:confirm delete  n/Esc:cancel".to_string()
     } else {
