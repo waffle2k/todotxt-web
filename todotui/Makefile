@@ -13,7 +13,7 @@ X86_DIR     := target-x86
 X86_BIN     := $(X86_DIR)/$(X86_TARGET)/release/todotui
 X86_ARCH    := x86_64
 
-.PHONY: build pi x86 publish deploy-pi
+.PHONY: build pi x86 release push-pi
 
 build:
 	cargo build --release
@@ -30,19 +30,18 @@ x86:
 	strip $(X86_BIN)
 	@echo "x86_64: $(X86_BIN) ($$(du -sh $(X86_BIN) | cut -f1))"
 
-# Publish all built binaries to the todo web app's data dir
-publish: pi
+# Build all archs and publish to server — clients self-update on next launch
+release: pi x86
 	mkdir -p $(PUBLISH_DIR)
-	cp $(PI_BIN) $(PUBLISH_DIR)/todotui-$(PI_ARCH)
-	sha256sum $(PI_BIN) | awk '{print $$1}' > $(PUBLISH_DIR)/todotui-$(PI_ARCH).sha256
+	cp $(PI_BIN)  $(PUBLISH_DIR)/todotui-$(PI_ARCH)
+	cp $(X86_BIN) $(PUBLISH_DIR)/todotui-$(X86_ARCH)
+	sha256sum $(PI_BIN)  | awk '{print $$1}' > $(PUBLISH_DIR)/todotui-$(PI_ARCH).sha256
+	sha256sum $(X86_BIN) | awk '{print $$1}' > $(PUBLISH_DIR)/todotui-$(X86_ARCH).sha256
 	@echo "Published aarch64: $$(cat $(PUBLISH_DIR)/todotui-$(PI_ARCH).sha256)"
-	@if [ -f $(X86_BIN) ]; then \
-		cp $(X86_BIN) $(PUBLISH_DIR)/todotui-$(X86_ARCH); \
-		sha256sum $(X86_BIN) | awk '{print $$1}' > $(PUBLISH_DIR)/todotui-$(X86_ARCH).sha256; \
-		echo "Published x86_64: $$(cat $(PUBLISH_DIR)/todotui-$(X86_ARCH).sha256)"; \
-	fi
+	@echo "Published x86_64:  $$(cat $(PUBLISH_DIR)/todotui-$(X86_ARCH).sha256)"
 
-deploy-pi: publish
+# Force-push binaries directly to Pi hosts (bypass self-update, for initial installs)
+push-pi: pi
 	@for host in $(PI_HOSTS); do \
 		echo "→ $$host"; \
 		scp $(PI_BIN) $$host:~/todotui; \
