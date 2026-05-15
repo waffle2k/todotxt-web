@@ -456,6 +456,34 @@ def bulk_action():
 
     return redirect(url_for('index'))
 
+@app.route('/journal')
+@login_required
+def view_journal():
+    """Change journal — last 200 mutations for the current user."""
+    tdb = get_user_todo_db()
+    if not tdb:
+        flash('Error accessing your todo list.', 'error')
+        return redirect(url_for('index'))
+    entries = tdb.get_journal()
+    return render_template('journal.html', entries=entries)
+
+
+@app.route('/restore/<int:journal_id>', methods=['POST'])
+@login_required
+def restore_journal(journal_id):
+    """Restore a task to its state before the given journal entry."""
+    tdb = get_user_todo_db()
+    if not tdb:
+        flash('Error accessing your todo list.', 'error')
+        return redirect(url_for('view_journal'))
+    if tdb.restore_from_journal(journal_id):
+        _backup_and_notify(tdb)
+        flash('Task restored successfully.', 'success')
+    else:
+        flash('Could not restore — entry not found or operation has no before-state.', 'error')
+    return redirect(url_for('view_journal'))
+
+
 @app.route('/export')
 @login_required
 def export_todo():
@@ -529,11 +557,14 @@ def profile():
             'total_contexts': len(tdb.get_all_contexts())
         }
 
+    heatmap = tdb.get_completion_heatmap() if tdb else []
+
     user_todo_display_path = user_manager.get_user_db_path(current_user.username)
     todo_directory = user_manager.get_todo_directory()
 
     return render_template('profile.html',
                          user_stats=user_stats,
+                         heatmap=heatmap,
                          user_todo_display_path=user_todo_display_path,
                          todo_directory=todo_directory)
 
@@ -669,7 +700,10 @@ case "$(uname -s)" in
   Darwin) OS=macos  ;;
   *)      echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
-ARCH=$(uname -m)
+case "$(uname -m)" in
+  arm64)   ARCH=aarch64 ;;
+  *)       ARCH=$(uname -m) ;;
+esac
 
 mkdir -p "$BIN_DIR"
 

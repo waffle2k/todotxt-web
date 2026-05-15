@@ -2,7 +2,7 @@ import os
 import re
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
 
 from todo_parser import TodoTask
@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS task_contexts (
     PRIMARY KEY (task_id, context)
 );
 CREATE INDEX IF NOT EXISTS idx_tc_context ON task_contexts(context);
+
+CREATE TABLE IF NOT EXISTS task_journal (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id     INTEGER,
+    operation   TEXT NOT NULL,
+    before_raw  TEXT,
+    after_raw   TEXT,
+    actor       TEXT,
+    ts          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_journal_ts      ON task_journal(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_journal_task_id ON task_journal(task_id);
 """
 
 
@@ -180,6 +192,14 @@ def write_backup(db_path: str, backup_dir: str) -> str:
     return backup_file
 
 
+def _log_journal(conn, task_id, operation: str, before_raw, after_raw, actor) -> None:
+    conn.execute(
+        """INSERT INTO task_journal (task_id, operation, before_raw, after_raw, actor)
+           VALUES (?, ?, ?, ?, ?)""",
+        (task_id, operation, before_raw, after_raw, actor),
+    )
+
+
 def _insert_tags(conn, task_id: int, projects: List[str], contexts: List[str]) -> None:
     seen_p: set = set()
     seen_c: set = set()
@@ -210,6 +230,8 @@ def _sync_tags(conn, task_id: int, projects: List[str], contexts: List[str]) -> 
 class TodoDb:
     def __init__(self, db_path: str):
         self.db_path = db_path
+        stem = os.path.splitext(os.path.basename(db_path))[0]
+        self.actor = stem[5:] if stem.startswith('todo_') else stem
         ensure_db(db_path)
 
     def load_tasks(self) -> None:
@@ -248,6 +270,7 @@ class TodoDb:
                 (0, priority or None, creation_date, clean, raw),
             ).lastrowid
             _sync_tags(conn, task_id, projects, contexts)
+            _log_journal(conn, task_id, 'add', None, raw, self.actor)
         return self.get_task(task_id)
 
     def update_task(
@@ -267,6 +290,7 @@ class TodoDb:
             row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             if not row:
                 return False
+            before_raw = row["raw_line"]
             raw = _build_raw_line(
                 priority, row["creation_date"], row["completion_date"],
                 bool(row["completed"]), clean, projects, contexts,
@@ -277,6 +301,7 @@ class TodoDb:
                 (clean, priority or None, raw, task_id),
             )
             _sync_tags(conn, task_id, projects, contexts)
+            _log_journal(conn, task_id, 'update', before_raw, raw, self.actor)
         return True
 
     def complete_task(self, task_id: int) -> bool:
@@ -293,6 +318,7 @@ class TodoDb:
                    updated_at=datetime('now') WHERE id=?""",
                 (completion_date, new_raw, task_id),
             )
+            _log_journal(conn, task_id, 'complete', row['raw_line'], new_raw, self.actor)
         return True
 
     def uncomplete_task(self, task_id: int) -> bool:
@@ -302,7 +328,8 @@ class TodoDb:
             ).fetchone()
             if not row:
                 return False
-            raw = row["raw_line"]
+            before_raw = row["raw_line"]
+            raw = before_raw
             if raw.startswith("x "):
                 raw = raw[2:]
                 m = re.match(r"^\d{4}-\d{2}-\d{2}\s+", raw)
@@ -315,12 +342,17 @@ class TodoDb:
                    updated_at=datetime('now') WHERE id=?""",
                 (priority, raw, task_id),
             )
+            _log_journal(conn, task_id, 'uncomplete', before_raw, raw, self.actor)
         return True
 
     def delete_task(self, task_id: int) -> bool:
         with _db(self.db_path) as conn:
-            cur = conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
-        return cur.rowcount > 0
+            row = conn.execute("SELECT raw_line FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if not row:
+                return False
+            conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+            _log_journal(conn, task_id, 'delete', row['raw_line'], None, self.actor)
+        return True
 
     def get_filtered_tasks(
         self,
@@ -388,6 +420,86 @@ class TodoDb:
             ).fetchall()
         return [r["context"] for r in rows]
 
+    def get_journal(self, limit: int = 200) -> list:
+        with _db(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT id, task_id, operation, before_raw, after_raw, actor, ts
+                   FROM task_journal ORDER BY ts DESC, id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def restore_from_journal(self, journal_id: int) -> bool:
+        """Restore a task to its state before the given journal entry."""
+        with _db(self.db_path) as conn:
+            entry = conn.execute(
+                "SELECT * FROM task_journal WHERE id=?", (journal_id,)
+            ).fetchone()
+            if not entry or not entry['before_raw'] or entry['operation'] in ('add', 'replace_all'):
+                return False
+            task_id = entry['task_id']
+            t = TodoTask(entry['before_raw'])
+            existing = conn.execute(
+                "SELECT id FROM tasks WHERE id=?", (task_id,)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE tasks SET completed=?, priority=?, creation_date=?,
+                       completion_date=?, description=?, raw_line=?,
+                       updated_at=datetime('now') WHERE id=?""",
+                    (1 if t.completed else 0, t.priority, t.creation_date,
+                     t.completion_date, t.get_clean_description(), t.raw_line, task_id),
+                )
+                _sync_tags(conn, task_id, t.projects, t.contexts)
+            else:
+                conn.execute(
+                    """INSERT INTO tasks (id, completed, priority, creation_date,
+                       completion_date, description, raw_line)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (task_id, 1 if t.completed else 0, t.priority, t.creation_date,
+                     t.completion_date, t.get_clean_description(), t.raw_line),
+                )
+                _insert_tags(conn, task_id, t.projects, t.contexts)
+            _log_journal(conn, task_id, 'restore', entry['after_raw'], entry['before_raw'], self.actor)
+        return True
+
+    def get_completion_heatmap(self) -> list:
+        """Return 52 weeks of daily completion counts for a GitHub-style heatmap.
+
+        Each entry: {'days': [...], 'month_label': str|None}
+        Each day:   {'date': 'YYYY-MM-DD', 'count': int, 'level': 0-4, 'future': bool}
+        """
+        today = date.today()
+        # Align to the Sunday of the current week, then go back 51 more weeks
+        current_week_sun = today - timedelta(days=(today.weekday() + 1) % 7)
+        start = current_week_sun - timedelta(weeks=51)
+
+        with _db(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT date(ts) AS day, COUNT(*) AS cnt
+                   FROM task_journal
+                   WHERE operation = 'complete' AND date(ts) >= ?
+                   GROUP BY day""",
+                (start.isoformat(),),
+            ).fetchall()
+        counts = {r['day']: r['cnt'] for r in rows}
+
+        weeks = []
+        prev_month = None
+        for w in range(52):
+            week_start = start + timedelta(days=w * 7)
+            month_label = week_start.strftime('%b') if week_start.month != prev_month else None
+            prev_month = week_start.month
+            days = []
+            for d in range(7):
+                day = week_start + timedelta(days=d)
+                day_str = day.isoformat()
+                cnt = counts.get(day_str, 0)
+                level = 0 if cnt == 0 else 1 if cnt == 1 else 2 if cnt <= 3 else 3 if cnt <= 6 else 4
+                days.append({'date': day_str, 'count': cnt, 'level': level, 'future': day > today})
+            weeks.append({'days': days, 'month_label': month_label})
+        return weeks
+
     def to_todo_txt(self) -> str:
         """Export all tasks as todo.txt content using stored raw_line."""
         with _db(self.db_path) as conn:
@@ -399,7 +511,10 @@ class TodoDb:
         """Replace all tasks from todo.txt content. Returns count imported."""
         count = 0
         with _db(self.db_path) as conn:
+            old_rows = conn.execute("SELECT raw_line FROM tasks ORDER BY id").fetchall()
+            before_raw = "\n".join(r["raw_line"] for r in old_rows) or None
             conn.execute("DELETE FROM tasks")
+            after_lines = []
             for line in content.splitlines():
                 line = line.strip()
                 if not line:
@@ -418,5 +533,7 @@ class TodoDb:
                     ),
                 ).lastrowid
                 _insert_tags(conn, task_id, t.projects, t.contexts)
+                after_lines.append(t.raw_line)
                 count += 1
+            _log_journal(conn, None, 'replace_all', before_raw, "\n".join(after_lines) or None, self.actor)
         return count

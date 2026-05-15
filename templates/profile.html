@@ -67,6 +67,82 @@
         </div>
     </div>
 
+    <!-- Completion Heatmap -->
+    {% if heatmap %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Completion Activity</h5>
+                </div>
+                <div class="card-body pb-2">
+                    <style>
+                        .heatmap-scroll { overflow-x: auto; padding-bottom: 4px; }
+                        .heatmap-outer { display: inline-flex; flex-direction: column; gap: 3px; }
+                        .heatmap-months { display: flex; margin-left: 22px; gap: 2px; }
+                        .heatmap-month { width: 13px; font-size: .68em; color: #888; white-space: nowrap; overflow: visible; }
+                        .heatmap-body { display: flex; gap: 0; }
+                        .heatmap-days { display: flex; flex-direction: column; justify-content: space-around; margin-right: 4px; height: 91px; }
+                        .heatmap-days span { font-size: .65em; color: #888; line-height: 1; }
+                        .heatmap-weeks { display: flex; gap: 2px; }
+                        .heatmap-week { display: flex; flex-direction: column; gap: 2px; }
+                        .heatmap-cell { width: 11px; height: 11px; border-radius: 2px; cursor: default; }
+                        .heatmap-cell.l0 { background: #ebedf0; }
+                        .heatmap-cell.l1 { background: #9be9a8; }
+                        .heatmap-cell.l2 { background: #40c463; }
+                        .heatmap-cell.l3 { background: #30a14e; }
+                        .heatmap-cell.l4 { background: #216e39; }
+                        .heatmap-cell.future { background: transparent; }
+                        .heatmap-legend { display: flex; align-items: center; gap: 3px; margin-top: 6px; justify-content: flex-end; font-size: .7em; color: #888; }
+                        .heatmap-legend .heatmap-cell { cursor: default; }
+                    </style>
+                    <div class="heatmap-scroll">
+                        <div class="heatmap-outer">
+                            <!-- Month labels -->
+                            <div class="heatmap-months">
+                                {% for week in heatmap %}
+                                <div class="heatmap-month">{{ week.month_label or '' }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="heatmap-body">
+                                <!-- Day-of-week labels: Sun Mon … Sat -->
+                                <div class="heatmap-days">
+                                    <span>&nbsp;</span>
+                                    <span>M</span>
+                                    <span>&nbsp;</span>
+                                    <span>W</span>
+                                    <span>&nbsp;</span>
+                                    <span>F</span>
+                                    <span>&nbsp;</span>
+                                </div>
+                                <div class="heatmap-weeks">
+                                    {% for week in heatmap %}
+                                    <div class="heatmap-week">
+                                        {% for cell in week.days %}
+                                        <div class="heatmap-cell {% if cell.future %}future{% else %}l{{ cell.level }}{% endif %}"
+                                             title="{{ cell.date }}{% if not cell.future %}: {{ cell.count }} completion{{ 's' if cell.count != 1 else '' }}{% endif %}"></div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="heatmap-legend">
+                                Less
+                                <div class="heatmap-cell l0"></div>
+                                <div class="heatmap-cell l1"></div>
+                                <div class="heatmap-cell l2"></div>
+                                <div class="heatmap-cell l3"></div>
+                                <div class="heatmap-cell l4"></div>
+                                More
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- File Management -->
     <div class="row mb-4">
         <div class="col-md-6">

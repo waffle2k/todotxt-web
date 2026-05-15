@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Change Journal - Todo.txt Manager{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h4 class="mb-0"><i class="bi bi-journal-text"></i> Change Journal</h4>
+        <small class="text-muted">Last {{ entries|length }} mutations — most recent first</small>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Tasks
+        </a>
+    </div>
+</div>
+
+{% if entries %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th style="width:13em">Time</th>
+                <th style="width:7em">Operation</th>
+                <th style="width:4em">Task</th>
+                <th>Before</th>
+                <th>After</th>
+                <th style="width:5em"></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for e in entries %}
+        {% set op = e.operation %}
+        {% if op == 'add' %}
+            {% set badge = 'bg-success' %}
+        {% elif op == 'update' %}
+            {% set badge = 'bg-primary' %}
+        {% elif op == 'complete' %}
+            {% set badge = 'bg-secondary' %}
+        {% elif op == 'uncomplete' %}
+            {% set badge = 'bg-warning text-dark' %}
+        {% elif op == 'delete' %}
+            {% set badge = 'bg-danger' %}
+        {% elif op == 'restore' %}
+            {% set badge = 'bg-info text-dark' %}
+        {% else %}
+            {% set badge = 'bg-dark' %}
+        {% endif %}
+        <tr>
+            <td class="font-monospace text-muted" style="font-size:.8em">{{ e.ts }}</td>
+            <td><span class="badge {{ badge }}">{{ op }}</span></td>
+            <td class="text-muted">{% if e.task_id %}#{{ e.task_id }}{% else %}&mdash;{% endif %}</td>
+            <td style="max-width:28em">
+                {% if e.before_raw %}
+                    {% if op == 'replace_all' %}
+                        <span class="text-muted font-monospace" style="font-size:.8em">({{ e.before_raw.splitlines()|length }} lines)</span>
+                    {% else %}
+                        <span class="font-monospace" style="font-size:.82em;word-break:break-all">{{ e.before_raw[:120] }}{% if e.before_raw|length > 120 %}&hellip;{% endif %}</span>
+                    {% endif %}
+                {% else %}
+                    <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </td>
+            <td style="max-width:28em">
+                {% if e.after_raw %}
+                    {% if op == 'replace_all' %}
+                        <span class="text-muted font-monospace" style="font-size:.8em">({{ e.after_raw.splitlines()|length }} lines)</span>
+                    {% else %}
+                        <span class="font-monospace" style="font-size:.82em;word-break:break-all">{{ e.after_raw[:120] }}{% if e.after_raw|length > 120 %}&hellip;{% endif %}</span>
+                    {% endif %}
+                {% else %}
+                    <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if e.before_raw and op not in ('add', 'replace_all') %}
+                <form method="post" action="{{ url_for('restore_journal', journal_id=e.id) }}"
+                      onsubmit="return confirm('Restore task #{{ e.task_id }} to its before-state?')">
+                    <button type="submit" class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size:.8em">
+                        <i class="bi bi-arrow-counterclockwise"></i> Restore
+                    </button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> No journal entries yet. Mutations (add, edit, complete, delete) will appear here.
+</div>
+{% endif %}
+{% endblock %}
