@@ -23,9 +23,7 @@ MACOS_X86_TARGET := x86_64-apple-darwin
 MACOS_X86_DIR    := target-macos-x86
 MACOS_X86_BIN    := $(MACOS_X86_DIR)/$(MACOS_X86_TARGET)/release/todotui
 
-PI_HOSTS ?= terminal pmb@192.168.1.84
-
-.PHONY: build linux-arm linux-x86 macos-arm macos-x86 release push-pi
+.PHONY: build linux-arm linux-x86 macos-arm macos-x86 release
 
 build:
 	cargo build --release
@@ -63,10 +61,3 @@ release: linux-arm linux-x86 macos-arm macos-x86
 	  echo "Published $$f: $$(cat $(PUBLISH_DIR)/todotui-$$f.sha256)"; \
 	done
 	@echo "Published todo"
-
-# Force-push aarch64 binary directly to Pi hosts (for initial install / migration)
-push-pi: linux-arm
-	@for host in $(PI_HOSTS); do \
-		echo "→ $$host"; \
-		scp $(PI_BIN) $$host:~/todotui; \
-	done
