@@ -10,7 +10,10 @@ X86_TARGET := x86_64-unknown-linux-musl
 X86_DIR    := target-linux-x86
 X86_BIN    := $(X86_DIR)/$(X86_TARGET)/release/todotui
 
-# ── macOS aarch64 (Apple Silicon) — via cargo-zigbuild ────────────────────────
+# ── macOS aarch64 (Apple Silicon / M-series) — via cargo-zigbuild ────────────
+# The Rust target is aarch64-apple-darwin, but macOS reports "arm64" from
+# uname -m. The release target publishes under both names so that the
+# install.sh script (which uses uname -m directly) gets the right file.
 MACOS_ARM_TARGET := aarch64-apple-darwin
 MACOS_ARM_DIR    := target-macos-arm
 MACOS_ARM_BIN    := $(MACOS_ARM_DIR)/$(MACOS_ARM_TARGET)/release/todotui
@@ -52,9 +55,10 @@ release: linux-arm linux-x86 macos-arm macos-x86
 	cp $(PI_BIN)        $(PUBLISH_DIR)/todotui-linux-aarch64
 	cp $(X86_BIN)       $(PUBLISH_DIR)/todotui-linux-x86_64
 	cp $(MACOS_ARM_BIN) $(PUBLISH_DIR)/todotui-macos-aarch64
+	cp $(MACOS_ARM_BIN) $(PUBLISH_DIR)/todotui-macos-arm64
 	cp $(MACOS_X86_BIN) $(PUBLISH_DIR)/todotui-macos-x86_64
 	cp ../todo.py       $(PUBLISH_DIR)/todo
-	@for f in linux-aarch64 linux-x86_64 macos-aarch64 macos-x86_64; do \
+	@for f in linux-aarch64 linux-x86_64 macos-aarch64 macos-arm64 macos-x86_64; do \
 	  sha256sum $(PUBLISH_DIR)/todotui-$$f | awk '{print $$1}' > $(PUBLISH_DIR)/todotui-$$f.sha256; \
 	  echo "Published $$f: $$(cat $(PUBLISH_DIR)/todotui-$$f.sha256)"; \
 	done
