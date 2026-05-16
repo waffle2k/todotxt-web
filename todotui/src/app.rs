@@ -68,7 +68,8 @@ impl App {
         if pattern.is_empty() {
             self.filtered = (0..self.tasks.len()).collect();
         } else {
-            match Regex::new(pattern) {
+            let ci_pattern = format!("(?i){}", pattern);
+            match Regex::new(&ci_pattern) {
                 Ok(re) => {
                     self.filtered = (0..self.tasks.len())
                         .filter(|&i| re.is_match(&self.tasks[i].raw_line))
